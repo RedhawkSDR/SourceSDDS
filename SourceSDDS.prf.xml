@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties PUBLIC "-//JTRS//DTD SCA V2.2.2 PRF//EN" "properties.dtd">
+<properties>
+  <struct id="advanced_optimizations" mode="readwrite">
+    <description>These advanced optimizations are only read during component start and cannot be changed while the component is started. </description>
+    <simple id="advanced_optimizations::buffer_size" name="buffer_size" type="ulong">
+      <description>Number of packets to put in the sdds buffer at startup. Note: The total amount of memory allocated is bufferSize * 1080b</description>
+      <value>200000</value>
+      <units>pkts</units>
+    </simple>
+    <simple id="advanced_optimizations::udp_socket_buffer_size" mode="readwrite" name="udp_socket_buffer_size" type="ulong">
+      <description>The kernels UDP socket buffer size. If non-zero, an attempt will be made to set the socket buffer size. Will be set to actual socket buffer size if set fails. The max UDP socket buffer size is a system configuration and can be set with sysctl. </description>
+      <value>0</value>
+      <units>bytes</units>
+      <kind kindtype="property"/>
+      <action type="external"/>
+    </simple>
+    <simple id="advanced_optimizations::pkts_per_socket_read" name="pkts_per_socket_read" type="ushort">
+      <description>The number of UDP packets to request from the kernel per read (recvmmsg). This must be significantly less then the total buffer size. See recvmmsg for details. </description>
+      <value>500</value>
+      <units>pkts</units>
+    </simple>
+    <simple id="advanced_optimizations::pkts_per_buffer_read" name="pkts_per_buffer_read" type="ushort">
+      <description>The number of packets read from the internal buffer. It is these packets that are used to form the bulkIO packet to push. </description>
+      <value>500</value>
+      <units>pkts</units>
+    </simple>
+    <simple id="advanced_optimizations::socket_read_thread_affinity" name="socket_read_thread_affinity" type="string">
+      <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which reads from the socket to only the specified CPUs. Generally this is not needed.</description>
+    </simple>
+    <simple id="advanced_optimizations::work_thread_affinity" name="work_thread_affinity" type="string">
+      <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which consumes from the packet buffer.</description>
+    </simple>
+    <configurationkind kindtype="property"/>
+  </struct>
+  <struct id="attachment_override" mode="readwrite">
+    <description>To override the configuration </description>
+    <simple id="attachment_override::enabled" name="enabled" type="boolean">
+      <value>false</value>
+    </simple>
+    <simple id="attachment_override::ip_address" name="ip_address" type="string"/>
+    <simple id="attachment_override::vlan" name="vlan" type="ushort">
+      <value>0</value>
+    </simple>
+    <simple id="attachment_override:port" mode="readwrite" name="port" type="ushort">
+      <value>29495</value>
+      <kind kindtype="property"/>
+      <action type="external"/>
+    </simple>
+    <configurationkind kindtype="property"/>
+  </struct>
+  <simple id="interface" mode="readwrite" type="string">
+    <value>eth0</value>
+    <kind kindtype="property"/>
+    <action type="external"/>
+  </simple>
+</properties>

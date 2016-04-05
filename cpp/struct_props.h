@@ -18,6 +18,8 @@ struct advanced_optimizations_struct {
         udp_socket_buffer_size = 0;
         pkts_per_socket_read = 500;
         pkts_per_buffer_read = 500;
+        socket_read_thread_affinity = "";
+        work_thread_affinity = "";
     };
 
     static std::string getId() {

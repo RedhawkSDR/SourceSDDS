@@ -9,6 +9,7 @@
 
 #include "SourceSDDS.h"
 #include <signal.h>
+#include "AffinityUtils.h"
 
 PREPARE_LOGGING(SourceSDDS_i)
 
@@ -37,6 +38,12 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	m_pktbuffer.initialize(advanced_optimizations.buffer_size);
 	m_socketReaderThread = new boost::thread(boost::bind(&SocketReader::run, boost::ref(m_socketReader), &m_pktbuffer));
 
+	// Attempt to set the affinity of the socket reader thread if the user has told us to.
+	if (!advanced_optimizations.socket_read_thread_affinity.empty() && !(advanced_optimizations.socket_read_thread_affinity == "")) {
+		setAffinity(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_affinity);
+	}
+
+	advanced_optimizations.socket_read_thread_affinity = getAffinity(m_socketReaderThread->native_handle());
 
 	// Call the parent start
 	SourceSDDS_base::start();

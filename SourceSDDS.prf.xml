@@ -27,9 +27,11 @@
     </simple>
     <simple id="advanced_optimizations::socket_read_thread_affinity" name="socket_read_thread_affinity" type="string">
       <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which reads from the socket to only the specified CPUs. Generally this is not needed.</description>
+      <value></value>
     </simple>
     <simple id="advanced_optimizations::work_thread_affinity" name="work_thread_affinity" type="string">
       <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which consumes from the packet buffer.</description>
+      <value></value>
     </simple>
     <configurationkind kindtype="property"/>
   </struct>

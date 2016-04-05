@@ -16,7 +16,7 @@ PREPARE_LOGGING(SourceSDDS_i)
 SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
     SourceSDDS_base(uuid, label),
 	m_socketReaderThread(NULL),
-	m_sddsToBulkioThread(NULL)
+	m_sddsToBulkIOThread(NULL)
 {
 }
 
@@ -30,12 +30,16 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 		return;
 	}
 
+	// This also destroys all of our buffers
+	destroyBuffersAndJoinThreads();
 
-	stopAndJoinThreads();
-
-	// Setup the socketReader
-	setupConnectionOptions();
+	// Initialize our buffer of packets
 	m_pktbuffer.initialize(advanced_optimizations.buffer_size);
+
+	//////////////////////////////////////////
+	// Setup the socketReader
+	//////////////////////////////////////////
+	setupConnectionOptions();
 	m_socketReaderThread = new boost::thread(boost::bind(&SocketReader::run, boost::ref(m_socketReader), &m_pktbuffer));
 
 	// Attempt to set the affinity of the socket reader thread if the user has told us to.
@@ -45,12 +49,17 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 
 	advanced_optimizations.socket_read_thread_affinity = getAffinity(m_socketReaderThread->native_handle());
 
+	//////////////////////////////////////////
+	// Now setup the packet processor
+	//////////////////////////////////////////
+	m_sddsToBulkIOThread = new boost::thread(boost::bind(&SddsToBulkIOProcessor::run, boost::ref(m_sddsToBulkIO), &m_pktbuffer));
+
 	// Call the parent start
 	SourceSDDS_base::start();
 }
 
 void SourceSDDS_i::stop () throw (CF::Resource::StopError, CORBA::SystemException) {
-	stopAndJoinThreads();
+	destroyBuffersAndJoinThreads();
 	SourceSDDS_base::stop();
 }
 
@@ -77,12 +86,13 @@ void SourceSDDS_i::constructor()
 /**
  * Stops the socket reader thread and the SDDS to Bulkio worker threads
  */
-void SourceSDDS_i::stopAndJoinThreads() {
+void SourceSDDS_i::destroyBuffersAndJoinThreads() {
 
 	// Its possible that the socket readers could be caught waiting on a buffer so call shutdown
 	// then destroy the buffers to break the blocking call. It may return buffers back to the queue so we can call destroy again
-	// at the end.  It shouldnt hurt.
+	// at the end.  It shouldn't hurt...right?
 	m_socketReader.shutDown();
+	m_sddsToBulkIO.shutDown();
 	m_pktbuffer.destroyBuffers();
 
 	// Delete the socket reader and sddsToBulkIO thread if it already exists
@@ -93,12 +103,11 @@ void SourceSDDS_i::stopAndJoinThreads() {
 		m_socketReaderThread = NULL;
 	}
 
-	if (m_sddsToBulkioThread) {
+	if (m_sddsToBulkIOThread) {
 		LOG_DEBUG(SourceSDDS_i, "Shutting down the sdds to bulkio thread");
-		// TODO: Shutdown the threads activity
-		m_sddsToBulkioThread->join();
-		delete m_sddsToBulkioThread;
-		m_sddsToBulkioThread = NULL;
+		m_sddsToBulkIOThread->join();
+		delete m_sddsToBulkIOThread;
+		m_sddsToBulkIOThread = NULL;
 	}
 
 	LOG_DEBUG(SourceSDDS_i, "Destroying the existing packet buffers");

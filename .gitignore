@@ -2,10 +2,7 @@ cpp/.deps/
 cpp/Makefile
 cpp/Makefile.in
 cpp/SourceSDDS
-cpp/SourceSDDS-SocketReader.o
-cpp/SourceSDDS-SourceSDDS.o
-cpp/SourceSDDS-SourceSDDS_base.o
-cpp/SourceSDDS-main.o
+cpp/*.o
 cpp/aclocal.m4
 cpp/autom4te.cache/
 cpp/config.guess

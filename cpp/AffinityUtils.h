@@ -68,7 +68,6 @@ int setAffinity(pthread_t thread, std::string str_mask) {
 	for (j = 0; j < CPU_SETSIZE; j++) {
 		if (ipow(2,j) & mask) {
 			CPU_SET(j, &cpuset);
-			std::cout << "Setting CPU " << j << "to on" << std::endl;
 		}
 	}
 

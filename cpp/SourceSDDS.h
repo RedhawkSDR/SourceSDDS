@@ -4,6 +4,7 @@
 #include "SourceSDDS_base.h"
 #include "SmartPacketBuffer.h"
 #include "SocketReader.h"
+#include "SddsToBulkIOProcessor.h"
 
 class SourceSDDS_i : public SourceSDDS_base
 {
@@ -19,10 +20,12 @@ class SourceSDDS_i : public SourceSDDS_base
     private:
         SmartPacketBuffer<SDDSpacket> m_pktbuffer;
         SocketReader m_socketReader;
+        SddsToBulkIOProcessor m_sddsToBulkIO;
+
         boost::thread *m_socketReaderThread;
-        boost::thread *m_sddsToBulkioThread;
+        boost::thread *m_sddsToBulkIOThread;
         void setupConnectionOptions();
-        void stopAndJoinThreads();
+        void destroyBuffersAndJoinThreads();
 
 };
 

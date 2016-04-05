@@ -4,6 +4,8 @@
 # by opening the Properties dialog of your project and choosing C/C++ Build ->
 # Tool Chain Editor, and un-checking "Exclude resource from build "
 redhawk_SOURCES_auto = AffinityUtils.h
+redhawk_SOURCES_auto += SddsToBulkIOProcessor.cpp
+redhawk_SOURCES_auto += SddsToBulkIOProcessor.h
 redhawk_SOURCES_auto += SmartPacketBuffer.h
 redhawk_SOURCES_auto += SocketReader.cpp
 redhawk_SOURCES_auto += SocketReader.h

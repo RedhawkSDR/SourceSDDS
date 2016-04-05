@@ -179,10 +179,17 @@ private:
     SmartPacketBuffer(const SmartPacketBuffer&);              // Disabled copy constructor
     SmartPacketBuffer& operator = (const SmartPacketBuffer&); // Disabled assign operator
     bool m_shuttingDown;
-    bool empties_available() const { return m_empty_buffers.size() > 0; }
-    bool empties_available(size_t num) const { return m_empty_buffers.size() >= num; }
-    bool full_available() const { return m_full_buffers.size() > 0; }
-    bool full_available(size_t num) const { return m_full_buffers.size() >= num; }
+
+    /**
+     * If we are shutting down we need to just open the gates up and let the threads run.
+     * If not we'll have folks blocking on us
+     */
+    bool empties_available() const { return m_empty_buffers.size() > 0 					|| m_shuttingDown; }
+    bool empties_available(size_t num) const { return m_empty_buffers.size() >= num 	|| m_shuttingDown; }
+    bool full_available() const { return m_full_buffers.size() > 0 						|| m_shuttingDown; }
+    bool full_available(size_t num) const { return m_full_buffers.size() >= num 		|| m_shuttingDown; }
+
+
     container_type m_empty_buffers;
     container_type m_full_buffers;
     boost::mutex m_empty_buffer_mutex;

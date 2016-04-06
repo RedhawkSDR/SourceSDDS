@@ -78,7 +78,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_shuttingDown = false;
 	m_running = true;
 
-    std::vector<SddsPacketPtr> bufVec;
+    std::deque<SddsPacketPtr> bufQue;
     int retval;
     size_t i;
 
@@ -130,11 +130,11 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
     while (not m_shuttingDown) {
 
 		// Fill our buffer with free packets
-    	pktbuffer->pop_empty_buffers(bufVec, m_pkts_per_read);
+    	pktbuffer->pop_empty_buffers(bufQue, m_pkts_per_read);
 
 		// Repoint the iovecs to the new buffers
 		for (i = 0; i < m_pkts_per_read; i++) {
-			iovecs[i].iov_base         = bufVec[i].get();
+			iovecs[i].iov_base         = bufQue[i].get();
 		}
 
 		// Reset the timeout
@@ -149,7 +149,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 			if (m_shuttingDown) {
 				// Don't drop the buffers! Put them back where you found them.
 				// XXX If we ever switch to a single producer single consumer no-lock no-wait data structure this may mess things up.
-				pktbuffer->recycle_buffers(bufVec);
+				pktbuffer->recycle_buffers(bufQue);
 				m_running = false;
 				break;
 			} // TODO: Considering using a boost::interrupt point instead
@@ -157,6 +157,6 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 		}
 
 		// Push the packets onto the queue
-		pktbuffer->push_full_buffers(bufVec);
+		pktbuffer->push_full_buffers(bufQue);
     }
 }

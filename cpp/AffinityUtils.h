@@ -1,3 +1,6 @@
+#ifndef AFFINITYUTILS_H_
+#define AFFINITYUTILS_H_
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -109,3 +112,5 @@ std::string getAffinity(pthread_t thread) {
 	stream << std::uppercase << std::hex << mask;
 	return stream.str();
 }
+
+#endif

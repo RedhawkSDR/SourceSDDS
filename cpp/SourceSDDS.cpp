@@ -25,6 +25,8 @@ SourceSDDS_i::~SourceSDDS_i()
 }
 
 void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartError) {
+	// TODO: Should we start all this processing up if nobody has connected to our ports?
+
 	if (started()) {
 		LOG_WARN(SourceSDDS_i, "Already started, call to start ignored.");
 		return;
@@ -91,28 +93,34 @@ void SourceSDDS_i::destroyBuffersAndJoinThreads() {
 	// Its possible that the socket readers could be caught waiting on a buffer so call shutdown
 	// then destroy the buffers to break the blocking call. It may return buffers back to the queue so we can call destroy again
 	// at the end.  It shouldn't hurt...right?
+	LOG_DEBUG(SourceSDDS_i, "Shutting down the socket reader thread");
 	m_socketReader.shutDown();
+	LOG_DEBUG(SourceSDDS_i, "Shutting down the sdds to bulkio thread");
 	m_sddsToBulkIO.shutDown();
+
+	LOG_DEBUG(SourceSDDS_i, "Destroying the existing packet buffers");
 	m_pktbuffer.destroyBuffers();
 
 	// Delete the socket reader and sddsToBulkIO thread if it already exists
 	if (m_socketReaderThread) {
-		LOG_DEBUG(SourceSDDS_i, "Shutting down the socket reader thread");
+		LOG_DEBUG(SourceSDDS_i, "Joining the socket reader thread");
 		m_socketReaderThread->join();
 		delete m_socketReaderThread;
 		m_socketReaderThread = NULL;
 	}
 
 	if (m_sddsToBulkIOThread) {
-		LOG_DEBUG(SourceSDDS_i, "Shutting down the sdds to bulkio thread");
+		LOG_DEBUG(SourceSDDS_i, "Joining the sdds to bulkio thread");
 		m_sddsToBulkIOThread->join();
 		delete m_sddsToBulkIOThread;
 		m_sddsToBulkIOThread = NULL;
 	}
 
-	LOG_DEBUG(SourceSDDS_i, "Destroying the existing packet buffers");
+	LOG_DEBUG(SourceSDDS_i, "Destroying any packet buffers added during thread shutdown");
 	// Calling destroy a second time on purpose in case during thread shutdown the threads recycled some buffers.
 	m_pktbuffer.destroyBuffers();
+
+	LOG_DEBUG(SourceSDDS_i, "Everything should be shutdown and joined");
 }
 
 int SourceSDDS_i::serviceFunction()

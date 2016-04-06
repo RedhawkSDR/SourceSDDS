@@ -14,7 +14,6 @@
 #include <boost/thread/thread.hpp>
 #include <boost/call_traits.hpp>
 #include <string>
-#include <vector>
 #include <stdio.h>
 #include <iostream>
 #include <deque>
@@ -86,22 +85,23 @@ public:
     	return retVal;
     }
 
+    // TODO: I bet we can template this function so it doesnt have to be a deque
     /**
-     * Fill the provided vector until it is len in size of empty buffers.
+     * Fill the provided container until it is len in size of empty buffers.
      */
-    void pop_empty_buffers(std::vector<TypePtr> &vec, size_t len) {
+    void pop_empty_buffers(std::deque<TypePtr> &que, size_t len) {
     		// Maybe they have what they want already
-        	if (vec.size() >= len)
+        	if (que.size() >= len)
         		return;
 
-        	size_t request = len - vec.size();
+        	size_t request = len - que.size();
 
         	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
         	m_no_empty_buffers.wait(lock, boost::bind(&SmartPacketBuffer<T>::empties_available, this, request));
         	if (m_shuttingDown) {return;}
 
-        	while (vec.size() != len) {
-        		vec.push_back(*m_empty_buffers.begin());
+        	while (que.size() != len) {
+        		que.push_back(*m_empty_buffers.begin());
 				m_empty_buffers.pop_front();
         	}
 
@@ -115,14 +115,15 @@ public:
     	m_no_full_buffers.notify_one();
     }
 
+    // TODO: I bet we can template this function so it doesn't have to be a deque passed in
     /**
-     * Pushes all the buffers contained in vec onto the full buffer deque
-     * and clears the given vector.
+     * Pushes all the buffers contained in provided container onto the full buffer deque
+     * and clears the given container.
      */
-    void push_full_buffers(std::vector<TypePtr> &vec) {
+    void push_full_buffers(std::deque<TypePtr> &que) {
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
-    	m_full_buffers.insert(m_full_buffers.end(), vec.begin(), vec.end());
-    	vec.clear();
+    	m_full_buffers.insert(m_full_buffers.end(), que.begin(), que.end());
+    	que.clear();
     	lock.unlock();
 		m_no_full_buffers.notify_one();
     }
@@ -138,22 +139,23 @@ public:
 	}
 
 
+    // TODO: I bet we can template this function so it doesn't have to be a deque passed in
     /**
-     * Fill the provided vector until it is len in size of full buffers.
+     * Fill the provided container until it is len in size of full buffers.
      */
-    void pop_full_buffers(std::vector<TypePtr> &vec, size_t len) {
+    void pop_full_buffers(std::deque<TypePtr> &que, size_t len) {
 		// Maybe they have what they want already
-    	if (vec.size() >= len)
+    	if (que.size() >= len)
     		return;
 
-    	size_t request = len - vec.size();
+    	size_t request = len - que.size();
 
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
 		m_no_full_buffers.wait(lock, boost::bind(&SmartPacketBuffer<T>::full_available, this, request));
 		if (m_shuttingDown) {return;}
 
-    	while (vec.size() != len) {
-    		vec.push_back(*m_full_buffers.begin());
+    	while (que.size() != len) {
+    		que.push_back(*m_full_buffers.begin());
     		m_full_buffers.pop_front();
     	}
 
@@ -167,10 +169,11 @@ public:
     	m_no_empty_buffers.notify_one();
     }
 
-    void recycle_buffers(std::vector<TypePtr> &vec) {
+    // TODO: I bet we can template this function so it doesn't have to be a deque passed in
+    void recycle_buffers(std::deque<TypePtr> &que) {
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
-    	m_empty_buffers.insert(m_empty_buffers.end(), vec.begin(), vec.end());
-    	vec.clear();
+    	m_empty_buffers.insert(m_empty_buffers.end(), que.begin(), que.end());
+    	que.clear();
     	lock.unlock();
     	m_no_empty_buffers.notify_one();
     }

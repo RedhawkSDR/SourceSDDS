@@ -16,7 +16,8 @@ PREPARE_LOGGING(SourceSDDS_i)
 SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
     SourceSDDS_base(uuid, label),
 	m_socketReaderThread(NULL),
-	m_sddsToBulkIOThread(NULL)
+	m_sddsToBulkIOThread(NULL),
+	m_sddsToBulkIO(octet_out, short_out, float_out)
 {
 }
 

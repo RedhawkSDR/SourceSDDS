@@ -34,6 +34,12 @@ class SourceSDDS_base : public Component, protected ThreadedComponent
         // Ports
         /// Port: sdds_in
         bulkio::InSDDSPort *sdds_in;
+        /// Port: octet_out
+        bulkio::OutOctetPort *octet_out;
+        /// Port: short_out
+        bulkio::OutShortPort *short_out;
+        /// Port: float_out
+        bulkio::OutFloatPort *float_out;
 
     private:
 };

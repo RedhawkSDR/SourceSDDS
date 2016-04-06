@@ -7,23 +7,40 @@
 
 #include "SddsToBulkIOProcessor.h"
 #include "SddsToBulkIOUtils.h"
+#include <math.h>
 
 PREPARE_LOGGING(SddsToBulkIOProcessor)
 
-SddsToBulkIOProcessor::SddsToBulkIOProcessor():m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(false), m_expected_seq_number(0), m_current_ttv_flag(false), m_last_wsec(0), m_start_of_year(0) {
+SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_stream_id("DEFAULT_STREAM_ID")
+{
+	// reserve size so it is done at construct time
+	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
 }
 
 SddsToBulkIOProcessor::~SddsToBulkIOProcessor() {
 }
 
+void SddsToBulkIOProcessor::setStreamId(std::string stream_id) {
+	if (m_running) {
+		LOG_WARN(SddsToBulkIOProcessor, "Cannot set stream ID while running");
+		return;
+	}
+	m_stream_id = stream_id;
+}
 
-// TODO: We need to make sure this value is < the max corba transfer size and limit it to that if the user has asked to exceed it.
 void SddsToBulkIOProcessor::setPktsPerRead(size_t pkts_per_read) {
 	if (m_running) {
 		LOG_WARN(SddsToBulkIOProcessor, "Cannot set packets per read while thread is running");
 		return;
 	}
-	m_pkts_per_read = pkts_per_read;
+	if ((pkts_per_read * SDDS_DATA_SIZE) > (CORBA_MAX_XFER_BYTES)) {
+		LOG_WARN(SddsToBulkIOProcessor, "Cannot set packets per read to " << pkts_per_read << " this would be larger than what can be pushed by CORBA (" << ((CORBA_MAX_XFER_BYTES)) << " Bytes)");
+		m_pkts_per_read = floorl((CORBA_MAX_XFER_BYTES) / (SDDS_DATA_SIZE));
+		LOG_WARN(SddsToBulkIOProcessor, "Setting pkts per read to the max value: " << m_pkts_per_read);
+	} else {
+		m_pkts_per_read = pkts_per_read;
+	}
 
 	// This way we only ever allocate memory here with the reserve call
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
@@ -58,7 +75,7 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_shuttingDown = false;
 
 	// Feed in packets to process,
-	// TODO: reserve size for these as member variables.
+	// Since these are deques there is no reserve so we can just throw it on the stack.
 	std::deque<SddsPacketPtr> pktsToProcess;
 	std::deque<SddsPacketPtr> pktsToRecycle;
 
@@ -85,7 +102,7 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
  * Increments the expected sequence number if true.
  * If the packet does not match the expected, we calculate packets dropped and reset first packet
  */
-// TODO: How should we deal with out of order packets?  Right now we dont
+// TODO: How should we deal with out of order packets?  Right now we don't they are considered a drop, and a big one, then another drop.
 bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 
 	// First packet, its valid.
@@ -93,6 +110,7 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 		m_first_packet = false;
 		m_current_ttv_flag = pkt->get_ttv();
 		m_expected_seq_number = pkt->get_seq() + 1;
+		m_bps = pkt->bps;
 
 		// Adjust for the CRC packet
 		if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
@@ -154,10 +172,19 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 	while (pkt_it != pktsToWork.end()) {
 		SddsPacketPtr pkt = *pkt_it;
 
+		// The user may have requested we not push when the timecode is invalid. If this is the case we just need to recycle
+		// the buffers that don't have good ttv's and continue with the next packet hoping the ttv is true.
+		//XXX If they want to wait for ttv, this may result in a single push packet occurring at a non-max size.
+		// since the ttv changes so infrequently this is probably okay.
+		if (m_wait_for_ttv && !pkt->get_ttv()) {
+			pktsToRecycle.push_back(pkt);
+			pkt_it = pktsToWork.erase(pkt_it);
+			continue;
+		}
+
 		// If the order is not valid we've lost some packets, we need to push what we have, reset the SRI.
 		if (!orderIsValid(pkt)) {
-			//TODO: push what we have.
-			//TODO: reset Time stamp with new time stamp because there is a time discontinuity and resend SRI.
+			pushPacket();
 			m_first_packet = true;
 			return;
 		} else {
@@ -165,43 +192,34 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 			// If the current ttv flag does not match this packets, there has been a state change.
 			// This only matters if the user has requested we push on ttv.
-			// If this is the case we need to push, flush the queue and return so we start on
-			// the new ttv state.
+			// If this is the case we need to push and restart with the new ttv state.
 			if (m_current_ttv_flag != pkt->get_ttv() && m_push_on_ttv) {
 				m_current_ttv_flag = pkt->get_ttv();
-				// TODO: push what we have
-				// TODO: reset SRI
-				// TODO: return so we can refill our buffer
+				pushPacket();
+				return;
 			}
 
-			// The user may have requested we not push when the timecode is invalid. If this is the case we just need to recycle
-			// the buffers that don't have good ttv's and continue with the next packet hoping the ttv is true.
-			// TODO: The old SourceNIC would simply wait for the first TTV and then it didnt care. What do people want?
-			if (m_wait_for_ttv && !pkt->get_ttv()) {
-				pktsToRecycle.push_back(pkt);
-				pkt_it = pktsToWork.erase(pkt_it);
-				continue;
-			}
 
 			// At this point we should have a good packet and have dealt with any specific user requests regarding the ttv field.
-
-			//TODO: all the work needed
-			BULKIO::PrecisionUTCTime bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_wsec, m_start_of_year);
-			m_bps = getBps(pkt.get());
-
-			// TODO: Deal with endianness.
-
 			// Grab and push SRI if we need it
 			bool sriChanged;
 			mergeSddsSRI(pkt.get(), m_sri, sriChanged);
 
 			if (sriChanged) {
-				//TODO: Should we also flush the current buffer? If we do we need to consider that this may be the first time SRI is set.
-				//TODO: Push SRI
+				pushPacket();
+				pushSri();
+				return; // Refill our packets
 			}
 
-			// Copying the data of the current packet into the bulkIO data vector
+			// Create the bulkIO time stamp if this is the first packet to send.
+			if (m_bulkIO_data.size() == 0) {
+				m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_wsec, m_start_of_year);
+			}
 
+			// TODO: Deal with endianness.
+
+
+			// Copying the data of the current packet into the bulkIO data vector
 			//XXX: I wasnt sure if sizeof(pkt->d) would work but it does return 1024.
 			m_bulkIO_data.insert(m_bulkIO_data.end(), pkt->d, pkt->d + sizeof(pkt->d));
 
@@ -211,9 +229,68 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 			// We've worked through the full stack of packets, push the data and clear the buffer
 			if (pkt_it == pktsToWork.end()) {
-				//TODO: push packet
+				pushPacket();
 				m_bulkIO_data.clear();
 			}
 		}
 	}
+}
+
+void SddsToBulkIOProcessor::pushSri() {
+	LOG_DEBUG(SddsToBulkIOProcessor, "Pushing SRI");
+	switch(m_bps) {
+	case 8:
+		m_octet_out->pushSRI(m_sri);
+		break;
+	case 16:
+		m_short_out->pushSRI(m_sri);
+		break;
+	case 32:
+		m_float_out->pushSRI(m_sri);
+		break;
+	default:
+		LOG_ERROR(SddsToBulkIOProcessor, "Could not push sri, the bits per sample are non-standard and set to: " << m_bps);
+		break;
+	}
+
+}
+
+/**
+ * Pushes bulkIO and possibly an SRI packet if SRI has never been sent to that port.
+ * Will also clear the m_bulkIO_data vector.
+ */
+//TODO: Do we ever need to push an EOS flag?
+void SddsToBulkIOProcessor::pushPacket() {
+	if (m_bulkIO_data.size() == 0) {
+		return;
+	}
+
+	switch(m_bps) {
+	case 8:
+		if (m_octet_out->getCurrentSRI().count(m_stream_id)==0) {
+			m_octet_out->pushSRI(m_sri);
+		}
+
+		m_octet_out->pushPacket(m_bulkIO_data, m_bulkio_time_stamp, false, m_stream_id);
+		break;
+	case 16:
+		if (m_short_out->getCurrentSRI().count(m_stream_id)==0) {
+			m_short_out->pushSRI(m_sri);
+		}
+
+		m_short_out->pushPacket(reinterpret_cast<short*> (&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(short), m_bulkio_time_stamp, false, m_stream_id);
+		break;
+	case 32:
+		if (m_float_out->getCurrentSRI().count(m_stream_id)==0) {
+			m_float_out->pushSRI(m_sri);
+		}
+
+		m_float_out->pushPacket(reinterpret_cast<float*>(&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(float), m_bulkio_time_stamp, false, m_stream_id);
+		break;
+	default:
+		LOG_ERROR(SddsToBulkIOProcessor, "Could not push packet, the bits per sample are non-standard and set to: " << m_bps);
+		break;
+	}
+
+	m_bulkIO_data.clear();
 }

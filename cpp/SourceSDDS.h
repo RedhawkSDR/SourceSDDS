@@ -19,11 +19,12 @@ class SourceSDDS_i : public SourceSDDS_base
         int serviceFunction();
     private:
         SmartPacketBuffer<SDDSpacket> m_pktbuffer;
-        SocketReader m_socketReader;
-        SddsToBulkIOProcessor m_sddsToBulkIO;
 
         boost::thread *m_socketReaderThread;
         boost::thread *m_sddsToBulkIOThread;
+
+        SocketReader m_socketReader;
+        SddsToBulkIOProcessor m_sddsToBulkIO;
         void setupConnectionOptions();
         void destroyBuffersAndJoinThreads();
 

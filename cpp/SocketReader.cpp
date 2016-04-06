@@ -74,7 +74,6 @@ int SocketReader::getSocketBufferSize() {
 // TODO: Dont pass a pointer to the packet buffer that is so ugly
 void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	LOG_DEBUG(SocketReader, "Starting to run");
-	std::cout << "Setting shutdown to false" << std::endl;
 	m_shuttingDown = false;
 	m_running = true;
 
@@ -105,8 +104,9 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
     // This is the socket connection time out, if we do not receive data in this amount of time we break out of
     // the recv call.
     struct timeval tv;
-    tv.tv_sec = 1;  /* 30 Secs Timeout */
-    setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+    tv.tv_sec = m_timeout;
+    tv.tv_usec = 0;
+    setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv, sizeof(struct timeval));
     ////
 
 
@@ -143,7 +143,8 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 
 		// Get packets
 		//TODO: Should we add the flag MSG_WAITFORONE or MSG_WAITFORALL
-		retval = recvmmsg(m_sockfd, msgs, m_pkts_per_read, 0, &timeout);
+		//TODO: Dispite my attempts it seems this gets stuck if it is reading packets and then the packet stream stops.  How do I kill it?
+		retval = recvmmsg(m_sockfd, msgs, m_pkts_per_read, MSG_WAITFORONE, &timeout);
 
 		if (retval == -1) {
 			if (m_shuttingDown) {

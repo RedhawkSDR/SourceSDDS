@@ -2,7 +2,7 @@
 3690307ad4b0ff7cf4741285cef3f313  SourceSDDS_base.h
 8bfcd22353c3a57fee561ad86ee2a56b  reconf
 d99bf51118d46c725b91f7e0fcbd82e0  configure.ac
-762d1a4b6c9beee39dae7bd621783c96  Makefile.am
+e0eff76c70b7eb0426233c243ec8f328  Makefile.am
 c1457b6c32da2c45bb4a8c11eb3a42bc  struct_props.h
 780030ed0329789998a4a3e4e151fdbc  SourceSDDS.h
 239478e762c41bc33014e5abef99597b  SourceSDDS.cpp

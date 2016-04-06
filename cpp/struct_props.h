@@ -100,6 +100,7 @@ struct attachment_override_struct {
     attachment_override_struct ()
     {
         enabled = false;
+        ip_address = "127.0.0.1";
         vlan = 0;
         port = 29495;
     };

@@ -12,7 +12,7 @@
 PREPARE_LOGGING(SddsToBulkIOProcessor)
 
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
-	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_stream_id("DEFAULT_STREAM_ID")
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_stream_id("DEFAULT_STREAM_ID")
 {
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
@@ -137,31 +137,6 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 }
 
 
-
-/**
- * First Packet
- *   Check sequence
- *     if good (always the case)
- *       Check for ttv state change (Never changed we just set it)
- *         Check SRI?
- *         Fill bulkIO packet
- *
- *
- * Nth Packet
- *   Check sequence
- *     if good
- *       check for ttv state change
- *         if same
- *           Check SRI?
- *           Fill bulkIO packet
- *         if changed
- *           push what we have, set new state, return so we get a refill
- *     if bad FN
- *        push what we have, set first packet flag, return so we get a refill.
- */
-
-
-
 /**
  * This is the main method for processing the sdds packets. We want to push out in chunks of m_pkts_per_read so we try and keep
  * pktsToWork that size by keeping a second container of pkts to recycle. When we find a time discontinuity or are waiting for
@@ -174,8 +149,8 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 		// The user may have requested we not push when the timecode is invalid. If this is the case we just need to recycle
 		// the buffers that don't have good ttv's and continue with the next packet hoping the ttv is true.
-		//XXX If they want to wait for ttv, this may result in a single push packet occurring at a non-max size.
-		// since the ttv changes so infrequently this is probably okay.
+
+		//XXX If they want to wait for ttv, this may result in a single push packet occurring at a non-max size, since the ttv changes so infrequently this is probably okay.
 		if (m_wait_for_ttv && !pkt->get_ttv()) {
 			pktsToRecycle.push_back(pkt);
 			pkt_it = pktsToWork.erase(pkt_it);
@@ -249,7 +224,7 @@ void SddsToBulkIOProcessor::pushSri() {
 		m_float_out->pushSRI(m_sri);
 		break;
 	default:
-		LOG_ERROR(SddsToBulkIOProcessor, "Could not push sri, the bits per sample are non-standard and set to: " << m_bps);
+		LOG_ERROR(SddsToBulkIOProcessor, "Could not push sri, either the bits per sample is non-standard set to: " << m_bps);
 		break;
 	}
 

@@ -40,7 +40,9 @@
     <simple id="attachment_override::enabled" name="enabled" type="boolean">
       <value>false</value>
     </simple>
-    <simple id="attachment_override::ip_address" name="ip_address" type="string"/>
+    <simple id="attachment_override::ip_address" name="ip_address" type="string">
+      <value>127.0.0.1</value>
+    </simple>
     <simple id="attachment_override::vlan" name="vlan" type="ushort">
       <value>0</value>
     </simple>

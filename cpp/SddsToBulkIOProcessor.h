@@ -45,7 +45,7 @@ private:
 	bool m_current_ttv_flag;
 	uint16_t m_expected_seq_number;
 	std::vector<uint8_t> m_bulkIO_data;
-	long long m_last_wsec;
+	long long m_last_wsec, m_pkts_dropped;
 	time_t m_start_of_year;
 	unsigned short m_bps;
 	BULKIO::StreamSRI m_sri;

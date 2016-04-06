@@ -143,7 +143,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 
 		// Get packets
 		//TODO: Should we add the flag MSG_WAITFORONE or MSG_WAITFORALL
-		//TODO: Dispite my attempts it seems this gets stuck if it is reading packets and then the packet stream stops.  How do I kill it?
+		//TODO: Despite my attempts it seems this gets stuck if it is reading packets and then the packet stream stops.  How do I kill it?
 		retval = recvmmsg(m_sockfd, msgs, m_pkts_per_read, MSG_WAITFORONE, &timeout);
 
 		if (retval == -1) {

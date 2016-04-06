@@ -185,8 +185,8 @@ class SDDSpacket {
   uint16_t ssd[2];
   uint8_t aad[20];
   //======================== SDDS data
-//  uint8_t d[1024];
-  uint16_t d[512];
+  uint8_t d[1024];
+//  uint16_t d[512];
 
   //======================== SDDS methods
   uint16_t get_seq(void) { return ntohs(seq); }

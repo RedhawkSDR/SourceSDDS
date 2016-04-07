@@ -26,17 +26,19 @@ public:
     void run(SmartPacketBuffer<SDDSpacket> *pktbuffer);
     void shutDown();
     void setTimeout(int timeout);
-    void setPktsPerRead(int pkts_per_read);
+    void setPktsPerRead(size_t pkts_per_read);
+    size_t getPktsPerRead();
     void setConnectionInfo(std::string ip, uint16_t vlan, uint16_t port);
     void setSocketBufferSize(int socket_buffer_size);
-    int  getSocketBufferSize();
+    size_t getSocketBufferSize();
 private:
     bool m_shuttingDown;
     bool m_running;
     int m_timeout;
     size_t m_pkts_per_read;
     struct sockaddr_in m_addr;
-    int m_socket_buffer_size, m_sockfd;
+    size_t m_socket_buffer_size;
+	int m_sockfd;
 };
 
 #endif /* SOCKETREADER_H_ */

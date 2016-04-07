@@ -35,6 +35,9 @@ public:
 	void setWaitForTTV(bool wait_for_ttv);
 	void setPushOnTTV(bool push_on_ttv);
 	void setStreamId(std::string stream_id);
+	size_t getPktsPerRead();
+	bool getPushOnTTV();
+	bool getWaitOnTTV();
 private:
 	size_t m_pkts_per_read;
 	bool m_running;

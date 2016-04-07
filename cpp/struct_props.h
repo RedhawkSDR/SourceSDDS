@@ -15,11 +15,11 @@ struct advanced_optimizations_struct {
     advanced_optimizations_struct ()
     {
         buffer_size = 200000;
-        udp_socket_buffer_size = 0;
+        udp_socket_buffer_size = 134217728;
         pkts_per_socket_read = 500;
-        pkts_per_buffer_read = 500;
+        sdds_pkts_per_bulkio_push = 1000;
         socket_read_thread_affinity = "";
-        work_thread_affinity = "";
+        sdds_to_bulkio_thread_affinity = "";
     };
 
     static std::string getId() {
@@ -29,9 +29,9 @@ struct advanced_optimizations_struct {
     CORBA::ULong buffer_size;
     CORBA::ULong udp_socket_buffer_size;
     unsigned short pkts_per_socket_read;
-    unsigned short pkts_per_buffer_read;
+    unsigned short sdds_pkts_per_bulkio_push;
     std::string socket_read_thread_affinity;
-    std::string work_thread_affinity;
+    std::string sdds_to_bulkio_thread_affinity;
 };
 
 inline bool operator>>= (const CORBA::Any& a, advanced_optimizations_struct& s) {
@@ -47,14 +47,14 @@ inline bool operator>>= (const CORBA::Any& a, advanced_optimizations_struct& s) 
     if (props.contains("advanced_optimizations::pkts_per_socket_read")) {
         if (!(props["advanced_optimizations::pkts_per_socket_read"] >>= s.pkts_per_socket_read)) return false;
     }
-    if (props.contains("advanced_optimizations::pkts_per_buffer_read")) {
-        if (!(props["advanced_optimizations::pkts_per_buffer_read"] >>= s.pkts_per_buffer_read)) return false;
+    if (props.contains("advanced_optimizations::sdds_pkts_per_bulkio_push")) {
+        if (!(props["advanced_optimizations::sdds_pkts_per_bulkio_push"] >>= s.sdds_pkts_per_bulkio_push)) return false;
     }
     if (props.contains("advanced_optimizations::socket_read_thread_affinity")) {
         if (!(props["advanced_optimizations::socket_read_thread_affinity"] >>= s.socket_read_thread_affinity)) return false;
     }
     if (props.contains("advanced_optimizations::work_thread_affinity")) {
-        if (!(props["advanced_optimizations::work_thread_affinity"] >>= s.work_thread_affinity)) return false;
+        if (!(props["advanced_optimizations::work_thread_affinity"] >>= s.sdds_to_bulkio_thread_affinity)) return false;
     }
     return true;
 }
@@ -68,11 +68,11 @@ inline void operator<<= (CORBA::Any& a, const advanced_optimizations_struct& s) 
  
     props["advanced_optimizations::pkts_per_socket_read"] = s.pkts_per_socket_read;
  
-    props["advanced_optimizations::pkts_per_buffer_read"] = s.pkts_per_buffer_read;
+    props["advanced_optimizations::sdds_pkts_per_bulkio_push"] = s.sdds_pkts_per_bulkio_push;
  
     props["advanced_optimizations::socket_read_thread_affinity"] = s.socket_read_thread_affinity;
  
-    props["advanced_optimizations::work_thread_affinity"] = s.work_thread_affinity;
+    props["advanced_optimizations::work_thread_affinity"] = s.sdds_to_bulkio_thread_affinity;
     a <<= props;
 }
 
@@ -83,11 +83,11 @@ inline bool operator== (const advanced_optimizations_struct& s1, const advanced_
         return false;
     if (s1.pkts_per_socket_read!=s2.pkts_per_socket_read)
         return false;
-    if (s1.pkts_per_buffer_read!=s2.pkts_per_buffer_read)
+    if (s1.sdds_pkts_per_bulkio_push!=s2.sdds_pkts_per_bulkio_push)
         return false;
     if (s1.socket_read_thread_affinity!=s2.socket_read_thread_affinity)
         return false;
-    if (s1.work_thread_affinity!=s2.work_thread_affinity)
+    if (s1.sdds_to_bulkio_thread_affinity!=s2.sdds_to_bulkio_thread_affinity)
         return false;
     return true;
 }
@@ -160,6 +160,55 @@ inline bool operator== (const attachment_override_struct& s1, const attachment_o
 }
 
 inline bool operator!= (const attachment_override_struct& s1, const attachment_override_struct& s2) {
+    return !(s1==s2);
+}
+
+struct advanced_configuration_struct {
+    advanced_configuration_struct ()
+    {
+        push_on_ttv = false;
+        wait_on_ttv = false;
+    };
+
+    static std::string getId() {
+        return std::string("advanced_configuration");
+    };
+
+    bool push_on_ttv;
+    bool wait_on_ttv;
+};
+
+inline bool operator>>= (const CORBA::Any& a, advanced_configuration_struct& s) {
+    CF::Properties* temp;
+    if (!(a >>= temp)) return false;
+    const redhawk::PropertyMap& props = redhawk::PropertyMap::cast(*temp);
+    if (props.contains("advanced_configuration::push_on_ttv")) {
+        if (!(props["advanced_configuration::push_on_ttv"] >>= s.push_on_ttv)) return false;
+    }
+    if (props.contains("advanced_configuration::wait_on_ttv")) {
+        if (!(props["advanced_configuration::wait_on_ttv"] >>= s.wait_on_ttv)) return false;
+    }
+    return true;
+}
+
+inline void operator<<= (CORBA::Any& a, const advanced_configuration_struct& s) {
+    redhawk::PropertyMap props;
+ 
+    props["advanced_configuration::push_on_ttv"] = s.push_on_ttv;
+ 
+    props["advanced_configuration::wait_on_ttv"] = s.wait_on_ttv;
+    a <<= props;
+}
+
+inline bool operator== (const advanced_configuration_struct& s1, const advanced_configuration_struct& s2) {
+    if (s1.push_on_ttv!=s2.push_on_ttv)
+        return false;
+    if (s1.wait_on_ttv!=s2.wait_on_ttv)
+        return false;
+    return true;
+}
+
+inline bool operator!= (const advanced_configuration_struct& s1, const advanced_configuration_struct& s2) {
     return !(s1==s2);
 }
 

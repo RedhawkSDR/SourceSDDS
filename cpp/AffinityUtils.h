@@ -61,7 +61,6 @@ int setAffinity(pthread_t thread, std::string str_mask) {
 
 	mask = ConvertString<uint64_t>(str_mask, success);
 	if (not success) {
-		std::cout << "Failed to convert string mask (" << str_mask << ") to integer" << std::endl;
 		return -1;
 	}
 
@@ -76,8 +75,6 @@ int setAffinity(pthread_t thread, std::string str_mask) {
 
 	s = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 	if (s != 0) {
-		// TODO: Log error
-		std::cout << "Error setting affinity" << std::endl;
 		return -1;
 	}
 	return 0;

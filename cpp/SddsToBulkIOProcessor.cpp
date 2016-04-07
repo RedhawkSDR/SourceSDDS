@@ -46,6 +46,10 @@ void SddsToBulkIOProcessor::setPktsPerRead(size_t pkts_per_read) {
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
 }
 
+size_t SddsToBulkIOProcessor::getPktsPerRead() {
+	return m_pkts_per_read;
+}
+
 void SddsToBulkIOProcessor::shutDown() {
 	LOG_DEBUG(SddsToBulkIOProcessor, "Shutting down the packet processsor");
 	m_shuttingDown = true;
@@ -268,4 +272,12 @@ void SddsToBulkIOProcessor::pushPacket() {
 	}
 
 	m_bulkIO_data.clear();
+}
+
+bool SddsToBulkIOProcessor::getPushOnTTV() {
+	return m_push_on_ttv;
+}
+
+bool SddsToBulkIOProcessor::getWaitOnTTV() {
+	return m_wait_for_ttv;
 }

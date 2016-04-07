@@ -40,7 +40,7 @@ void SocketReader::setTimeout(int timeout) {
 	m_timeout = timeout;
 }
 
-void SocketReader::setPktsPerRead(int pkts_per_read) {
+void SocketReader::setPktsPerRead(size_t pkts_per_read) {
 	if (m_running) {
 		LOG_WARN(SocketReader, "Cannot change the packets per read while the socket reader thread is running");
 		return;
@@ -48,9 +48,13 @@ void SocketReader::setPktsPerRead(int pkts_per_read) {
 	m_pkts_per_read = pkts_per_read;
 }
 
+size_t SocketReader::getPktsPerRead() {
+	return m_pkts_per_read;
+}
+
 // TODO: Deal with the VLAN
 void SocketReader::setConnectionInfo(std::string ip, uint16_t vlan, uint16_t port) {
-	LOG_INFO(SocketReader, "IP: " << ip << "\nVLAN: " << vlan << "\nPort: " << port);
+	LOG_DEBUG(SocketReader, "IP: " << ip << "\nVLAN: " << vlan << "\nPort: " << port);
 	if (m_running) {
 		LOG_WARN(SocketReader, "Cannot change the socket address while the socket reader thread is running");
 		return;
@@ -65,9 +69,10 @@ void SocketReader::setSocketBufferSize(int socket_buffer_size) {
 	m_socket_buffer_size = socket_buffer_size;
 }
 
-int SocketReader::getSocketBufferSize() {
+size_t SocketReader::getSocketBufferSize() {
 	return m_socket_buffer_size;
 }
+
 /**
  * Called in a boost thread to get unused buffers from packet buffer, fill with packets, place back into buffer.
  */

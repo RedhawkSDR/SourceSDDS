@@ -30,6 +30,8 @@ class SourceSDDS_base : public Component, protected ThreadedComponent
         advanced_optimizations_struct advanced_optimizations;
         /// Property: attachment_override
         attachment_override_struct attachment_override;
+        /// Property: advanced_configuration
+        advanced_configuration_struct advanced_configuration;
 
         // Ports
         /// Port: sdds_in

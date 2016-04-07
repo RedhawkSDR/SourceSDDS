@@ -10,7 +10,7 @@
     </simple>
     <simple id="advanced_optimizations::udp_socket_buffer_size" mode="readwrite" name="udp_socket_buffer_size" type="ulong">
       <description>The kernels UDP socket buffer size. If non-zero, an attempt will be made to set the socket buffer size. Will be set to actual socket buffer size if set fails. The max UDP socket buffer size is a system configuration and can be set with sysctl. </description>
-      <value>0</value>
+      <value>134217728</value>
       <units>bytes</units>
       <kind kindtype="property"/>
       <action type="external"/>
@@ -20,17 +20,17 @@
       <value>500</value>
       <units>pkts</units>
     </simple>
-    <simple id="advanced_optimizations::pkts_per_buffer_read" name="pkts_per_buffer_read" type="ushort">
-      <description>The number of packets read from the internal buffer. It is these packets that are used to form the bulkIO packet to push. </description>
-      <value>500</value>
+    <simple id="advanced_optimizations::sdds_pkts_per_bulkio_push" name="sdds_pkts_per_bulkio_push" type="ushort">
+      <description>The number of SDDS packets read from the internal buffer and pushed out via bulkIO. SDDS packets have a 1024 B payload so CORBA_MAX / 1024 will  yield max data per push. This value is capped at the max corba value.</description>
+      <value>1000</value>
       <units>pkts</units>
     </simple>
     <simple id="advanced_optimizations::socket_read_thread_affinity" name="socket_read_thread_affinity" type="string">
       <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which reads from the socket to only the specified CPUs. Generally this is not needed.</description>
       <value></value>
     </simple>
-    <simple id="advanced_optimizations::work_thread_affinity" name="work_thread_affinity" type="string">
-      <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which consumes from the packet buffer.</description>
+    <simple id="advanced_optimizations::work_thread_affinity" name="sdds_to_bulkio_thread_affinity" type="string">
+      <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which consumes packets from internal buffer, and sends out bulkio</description>
       <value></value>
     </simple>
     <configurationkind kindtype="property"/>
@@ -53,9 +53,20 @@
     </simple>
     <configurationkind kindtype="property"/>
   </struct>
-  <simple id="interface" mode="readwrite" type="string">
+  <simple id="interface" mode="readwrite" name="interface" type="string">
     <value>eth0</value>
     <kind kindtype="property"/>
     <action type="external"/>
   </simple>
+  <struct id="advanced_configuration" mode="readwrite">
+    <simple id="advanced_configuration::push_on_ttv" name="push_on_ttv" type="boolean">
+      <description>If this flag is set, when a new SDDS packet comes in with the TTValid bit set, the component will push the data that it has received so far, and start the next CORBA transfer with the data in the packet it just received with the TTValid bit set.</description>
+      <value>false</value>
+    </simple>
+    <simple id="advanced_configuration::wait_on_ttv" name="wait_on_ttv" type="boolean">
+      <description>If set, no data will be sent unless a valid timestamp has been received.</description>
+      <value>false</value>
+    </simple>
+    <configurationkind kindtype="property"/>
+  </struct>
 </properties>

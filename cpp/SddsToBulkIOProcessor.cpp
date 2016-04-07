@@ -281,3 +281,15 @@ bool SddsToBulkIOProcessor::getPushOnTTV() {
 bool SddsToBulkIOProcessor::getWaitOnTTV() {
 	return m_wait_for_ttv;
 }
+
+unsigned short SddsToBulkIOProcessor::getBps() {
+	return m_bps;
+}
+
+long long SddsToBulkIOProcessor::getNumDropped() {
+	return m_pkts_dropped;
+}
+
+uint16_t SddsToBulkIOProcessor::getExpectedSequenceNumber() {
+	return m_expected_seq_number;
+}

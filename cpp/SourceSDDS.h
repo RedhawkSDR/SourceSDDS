@@ -30,6 +30,7 @@ class SourceSDDS_i : public SourceSDDS_base
         void destroyBuffersAndJoinThreads();
         struct advanced_configuration_struct get_advanced_configuration_struct();
         struct advanced_optimizations_struct get_advanced_optimizations_struct();
+        struct status_struct get_status_struct();
         void set_advanced_configuration_struct(struct advanced_configuration_struct request);
         void set_advanced_optimization_struct(struct advanced_optimizations_struct request);
 

@@ -212,4 +212,80 @@ inline bool operator!= (const advanced_configuration_struct& s1, const advanced_
     return !(s1==s2);
 }
 
+struct status_struct {
+    status_struct ()
+    {
+        expected_sequence_number = 0;
+        dropped_packets = 0;
+        bits_per_sample = 0;
+        empty_buffers_available = "";
+        buffers_to_work = "";
+    };
+
+    static std::string getId() {
+        return std::string("status");
+    };
+
+    unsigned short expected_sequence_number;
+    CORBA::ULong dropped_packets;
+    unsigned short bits_per_sample;
+    std::string empty_buffers_available;
+    std::string buffers_to_work;
+};
+
+inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
+    CF::Properties* temp;
+    if (!(a >>= temp)) return false;
+    const redhawk::PropertyMap& props = redhawk::PropertyMap::cast(*temp);
+    if (props.contains("status::expected_sequence_number")) {
+        if (!(props["status::expected_sequence_number"] >>= s.expected_sequence_number)) return false;
+    }
+    if (props.contains("status::dropped_packets")) {
+        if (!(props["status::dropped_packets"] >>= s.dropped_packets)) return false;
+    }
+    if (props.contains("status::bits_per_sample")) {
+        if (!(props["status::bits_per_sample"] >>= s.bits_per_sample)) return false;
+    }
+    if (props.contains("status::empty_buffers_available")) {
+        if (!(props["status::empty_buffers_available"] >>= s.empty_buffers_available)) return false;
+    }
+    if (props.contains("status::buffers_to_work")) {
+        if (!(props["status::buffers_to_work"] >>= s.buffers_to_work)) return false;
+    }
+    return true;
+}
+
+inline void operator<<= (CORBA::Any& a, const status_struct& s) {
+    redhawk::PropertyMap props;
+ 
+    props["status::expected_sequence_number"] = s.expected_sequence_number;
+ 
+    props["status::dropped_packets"] = s.dropped_packets;
+ 
+    props["status::bits_per_sample"] = s.bits_per_sample;
+ 
+    props["status::empty_buffers_available"] = s.empty_buffers_available;
+ 
+    props["status::buffers_to_work"] = s.buffers_to_work;
+    a <<= props;
+}
+
+inline bool operator== (const status_struct& s1, const status_struct& s2) {
+    if (s1.expected_sequence_number!=s2.expected_sequence_number)
+        return false;
+    if (s1.dropped_packets!=s2.dropped_packets)
+        return false;
+    if (s1.bits_per_sample!=s2.bits_per_sample)
+        return false;
+    if (s1.empty_buffers_available!=s2.empty_buffers_available)
+        return false;
+    if (s1.buffers_to_work!=s2.buffers_to_work)
+        return false;
+    return true;
+}
+
+inline bool operator!= (const status_struct& s1, const status_struct& s2) {
+    return !(s1==s2);
+}
+
 #endif // STRUCTPROPS_H

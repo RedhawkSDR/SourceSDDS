@@ -178,6 +178,14 @@ public:
     	m_no_empty_buffers.notify_one();
     }
 
+    size_t get_num_full_buffers() {
+    	return m_full_buffers.size();
+    }
+
+    size_t get_num_empty_buffers() {
+    	return m_empty_buffers.size();
+    }
+
 private:
     SmartPacketBuffer(const SmartPacketBuffer&);              // Disabled copy constructor
     SmartPacketBuffer& operator = (const SmartPacketBuffer&); // Disabled assign operator

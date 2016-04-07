@@ -21,6 +21,7 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 {
 	setPropertyQueryImpl(advanced_configuration, this, &SourceSDDS_i::get_advanced_configuration_struct);
 	setPropertyQueryImpl(advanced_optimizations, this, &SourceSDDS_i::get_advanced_optimizations_struct);
+	setPropertyQueryImpl(status, this, &SourceSDDS_i::get_status_struct);
 
 	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
 	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
@@ -28,6 +29,27 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 
 SourceSDDS_i::~SourceSDDS_i()
 {
+}
+
+struct status_struct SourceSDDS_i::get_status_struct() {
+	struct status_struct retVal;
+	retVal.bits_per_sample = m_sddsToBulkIO.getBps();
+	float percent = 100*(float) m_pktbuffer.get_num_full_buffers() / (float) advanced_optimizations.buffer_size;
+	std::stringstream ss;
+	ss.precision(2);
+	ss << m_pktbuffer.get_num_full_buffers() << " (" << percent << "%)";
+	retVal.buffers_to_work = ss.str();
+	ss.str("");
+
+	percent = 100*(float) m_pktbuffer.get_num_empty_buffers() / (float) advanced_optimizations.buffer_size;
+	ss << m_pktbuffer.get_num_empty_buffers() << " (" << percent << "%)";
+	retVal.empty_buffers_available = ss.str();
+
+	retVal.dropped_packets = m_sddsToBulkIO.getNumDropped();
+
+	retVal.expected_sequence_number = m_sddsToBulkIO.getExpectedSequenceNumber();
+
+	return retVal;
 }
 
 struct advanced_configuration_struct SourceSDDS_i::get_advanced_configuration_struct() {
@@ -101,8 +123,6 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
 }
 
 void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartError) {
-	// TODO: Should we start all this processing up if nobody has connected to our ports?
-
 	if (started()) {
 		LOG_WARN(SourceSDDS_i, "Already started, call to start ignored.");
 		return;

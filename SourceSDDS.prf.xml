@@ -69,4 +69,24 @@
     </simple>
     <configurationkind kindtype="property"/>
   </struct>
+  <struct id="status" mode="readonly">
+    <simple id="status::expected_sequence_number" name="expected_sequence_number" type="ushort">
+      <value>0</value>
+    </simple>
+    <simple id="status::dropped_packets" name="dropped_packets" type="ulong">
+      <value>0</value>
+    </simple>
+    <simple id="status::bits_per_sample" name="bits_per_sample" type="ushort">
+      <value>0</value>
+    </simple>
+    <simple id="status::empty_buffers_available" name="empty_buffers_available" type="string">
+      <description>The amount (and percentage of total) of empty buffers available to pull from</description>
+      <value></value>
+    </simple>
+    <simple id="status::buffers_to_work" name="buffers_to_work" type="string">
+      <description>The amount (and percentage of total) of full buffers needing to be converted to bulkIO</description>
+      <value></value>
+    </simple>
+    <configurationkind kindtype="property"/>
+  </struct>
 </properties>

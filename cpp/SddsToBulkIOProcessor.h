@@ -38,6 +38,9 @@ public:
 	size_t getPktsPerRead();
 	bool getPushOnTTV();
 	bool getWaitOnTTV();
+	unsigned short getBps();
+	long long getNumDropped();
+	uint16_t getExpectedSequenceNumber();
 private:
 	size_t m_pkts_per_read;
 	bool m_running;

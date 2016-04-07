@@ -106,6 +106,15 @@ void SourceSDDS_base::loadProperties()
                 "external",
                 "property");
 
+    addProperty(status,
+                status_struct(),
+                "status",
+                "",
+                "readonly",
+                "",
+                "external",
+                "property");
+
 }
 
 

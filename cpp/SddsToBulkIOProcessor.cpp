@@ -108,7 +108,7 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 		m_first_packet = false;
 		m_current_ttv_flag = pkt->get_ttv();
 		m_expected_seq_number = pkt->get_seq();
-		m_bps = pkt->bps;
+		m_bps = (pkt->bps == 31) ? 32 : pkt->bps;
 
 		return true;
 	}

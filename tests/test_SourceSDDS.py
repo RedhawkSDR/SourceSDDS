@@ -198,11 +198,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Get ports
         compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataOctetOut_out = self.comp.getPort('dataOctetOut')
+        compDataOctetOut_out = self.comp.getPort('octet_out')
 
         # Set properties
         self.comp.interface = 'lo'
-        self.comp.advanced_configuration.corbaTransferSize = 1024
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
         self.comp.advanced_optimizations.bufferSize = 200000
         
         sink = sb.DataSink()
@@ -213,15 +213,16 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Connect components
         self.comp.connect(sink, providesPortName='octetIn')
         
-        # Start components
-        self.comp.start()
-        sink.start()
         
         # Try to attach
         try:
             attachId = compDataSddsIn.attach(streamDef, 'test') 
         except:
             attachId = ''
+
+        # Start components
+        self.comp.start()
+        sink.start()
 
         # Wait for the attach
         time.sleep(1)
@@ -245,7 +246,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(len(data), 1024)
         # Validate data is correct
         self.assertEqual(data[:256], list(struct.pack('256B', *fakeData[:256])))
-        self.assertEqual(self.comp.status.packetsMissing, 0)
+        self.assertEqual(self.comp.status.dropped_packets, 0)
         
         sink.stop()
         
@@ -259,11 +260,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Get ports
         compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataFloatOut_out = self.comp.getPort('dataFloatOut')
+        compDataFloatOut_out = self.comp.getPort('float_out')
         
         # Set properties
         self.comp.interface = 'lo'
-        self.comp.advanced_configuration.corbaTransferSize = 1024
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
         self.comp.advanced_optimizations.bufferSize = 200000
         
         sink = sb.DataSink()
@@ -274,15 +275,15 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Connect components
         self.comp.connect(sink, providesPortName='floatIn')
         
-        #Start components.
-        self.comp.start()
-        sink.start()
-        
         # Try to attach
         try:
             attachId = compDataSddsIn.attach(streamDef, 'test') 
         except:
             attachId = ''
+        
+        #Start components.
+        self.comp.start()
+        sink.start()
 
         # Wait for the attach
         time.sleep(1)
@@ -307,7 +308,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Validate data is correct
         self.assertEqual(fakeData, list(struct.unpack('>256f', struct.pack('256f', *data))))
-        self.assertEqual(self.comp.status.packetsMissing, 0)
+        self.assertEqual(self.comp.status.dropped_packets, 0)
         
         sink.stop()
         
@@ -320,11 +321,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Get ports
         compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataShortOut_out = self.comp.getPort('dataShortOut')
+        compDataShortOut_out = self.comp.getPort('short_out')
         
         # Set properties
         self.comp.interface = 'lo'
-        self.comp.advanced_configuration.corbaTransferSize = 1024
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
         self.comp.advanced_optimizations.bufferSize = 200000
         
         sink = sb.DataSink()
@@ -335,15 +336,15 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
         
-        # Start components
-        self.comp.start()
-        sink.start()
-        
         # Try to attach
         try:
             attachId = compDataSddsIn.attach(streamDef, 'test') 
         except:
             attachId = ''
+        
+        # Start components
+        self.comp.start()
+        sink.start()
 
         #Wait for the attach
         time.sleep(1)
@@ -380,11 +381,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Get ports
         compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataShortOut_out = self.comp.getPort('dataShortOut')
+        compDataShortOut_out = self.comp.getPort('short_out')
 
         # Set properties
         self.comp.interface = 'lo'
-        self.comp.advanced_configuration.corbaTransferSize = 1024
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
         self.comp.advanced_optimizations.bufferSize = 200000
         
         sink = sb.DataSink()
@@ -435,11 +436,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Get ports
         compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataShortOut_out = self.comp.getPort('dataShortOut')
+        compDataShortOut_out = self.comp.getPort('short_out')
 
         # Set properties
         self.comp.interface = 'lo'
-        self.comp.advanced_configuration.corbaTransferSize = 2048
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
         self.comp.advanced_optimizations.bufferSize = 200000
 
         sink = sb.DataSink()
@@ -449,16 +450,16 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-
-        # Start components
-        self.comp.start()
-        sink.start()
         
         # Try to attach
         try:
             attachId = compDataSddsIn.attach(streamDef, 'test') 
         except:
             attachId = ''
+
+        # Start components
+        self.comp.start()
+        sink.start()
 
         # Wait for the attach
         time.sleep(1)
@@ -490,7 +491,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         print ("YLB YLB YLB Take a look at this test, I dont think its correct")
         self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('512h', *data[:512]))))
         self.assertEqual(list(struct.unpack('>512H', struct.pack('512h', *data[512:1024]))), [0] * 512)
-        self.assertEqual(self.comp.status.packetsMissing, 65536)
+        self.assertEqual(self.comp.status.dropped_packets, 0)
         sink.stop()
         
         
@@ -504,7 +505,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get ports
         compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataShortOut_out = self.comp.getPort('dataShortOut')
+        compDataShortOut_out = self.comp.getPort('short_out')
 
         # Set properties
         self.comp.interface = 'lo'
@@ -513,14 +514,14 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         attachId = ''
 
-        # Start component
-        self.comp.start()
-        
         # Try to attach
         try:
             attachId = compDataSddsIn.attach(streamDef, 'test') 
         except:
             attachId = ''
+            
+        # Start component
+        self.comp.start()
 
         # Wait for the attach
         time.sleep(1)

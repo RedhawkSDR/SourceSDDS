@@ -12,10 +12,16 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <linux/sockios.h>
+
 
 PREPARE_LOGGING(SocketReader)
 
-SocketReader::SocketReader(): m_shuttingDown(false), m_running(false), m_timeout(1), m_pkts_per_read(1), m_socket_buffer_size(-1), m_sockfd(NULL) {}
+SocketReader::SocketReader(): m_shuttingDown(false), m_running(false), m_timeout(1), m_pkts_per_read(1), m_socket_buffer_size(-1) {
+	m_multicast_connection = {0};
+	m_unicast_connection = {0};
+}
 
 SocketReader::~SocketReader() {}
 
@@ -24,7 +30,8 @@ void SocketReader::shutDown() {
 	m_shuttingDown = true;
 	m_running = false;
 	LOG_DEBUG(SocketReader, "Closing socket");
-	if (m_sockfd) { close(m_sockfd); }
+	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	m_multicast_connection = {0}; }
+	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			m_unicast_connection = {0}; }
 }
 
 void SocketReader::setTimeout(int timeout) {
@@ -33,8 +40,8 @@ void SocketReader::setTimeout(int timeout) {
 		return;
 	}
 
-	if (m_timeout >= 5) {
-		LOG_WARN(SocketReader, "Socket timeout is >= 5 secs. This may cause issues when the component is stopped.");
+	if (m_timeout >= MAX_ALLOWED_TIMEOUT) {
+		LOG_WARN(SocketReader, "Socket timeout is >= " << MAX_ALLOWED_TIMEOUT << " secs. This may cause issues when the component is stopped.");
 	}
 
 	m_timeout = timeout;
@@ -52,17 +59,29 @@ size_t SocketReader::getPktsPerRead() {
 	return m_pkts_per_read;
 }
 
-// TODO: Deal with the VLAN
-void SocketReader::setConnectionInfo(std::string ip, uint16_t vlan, uint16_t port) {
-	LOG_DEBUG(SocketReader, "IP: " << ip << "\nVLAN: " << vlan << "\nPort: " << port);
+void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint16_t vlan, uint16_t port) throw (BadParameterError) {
 	if (m_running) {
 		LOG_WARN(SocketReader, "Cannot change the socket address while the socket reader thread is running");
 		return;
+	} else if (ip.empty() || interface.empty()) {
+		LOG_ERROR(SocketReader, "IP or interface was empty when trying to setup the socket connection.")
 	}
 
-    m_addr.sin_family = AF_INET;
-    m_addr.sin_addr.s_addr = inet_addr(ip.c_str());
-    m_addr.sin_port = htons(port);
+	// If we'd already been running on a different socket.
+	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	m_multicast_connection = {0}; }
+	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			m_unicast_connection = {0}; }
+
+	in_addr_t lowMulti = inet_network("224.0.0.0");
+	in_addr_t highMulti = inet_network("239.255.255.250");
+
+
+	// Looks like we're doing a multicast port. Create multicast client.
+	// This throws BAD_PARAM if there are issues.
+	if ((inet_network(ip.c_str()) > lowMulti) && (inet_addr(ip.c_str()) < highMulti)) {
+		m_multicast_connection = multicast_client(interface.c_str(), ip.c_str(), port);
+	} else {
+		m_unicast_connection = unicast_client(interface.c_str(), ip.c_str(), port);
+	}
 }
 
 void SocketReader::setSocketBufferSize(int socket_buffer_size) {
@@ -81,6 +100,8 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	LOG_DEBUG(SocketReader, "Starting to run");
 	m_shuttingDown = false;
 	m_running = true;
+	int socket = (m_multicast_connection.sock != 0) ? (m_multicast_connection.sock) : (m_unicast_connection.sock);
+
 
     std::deque<SddsPacketPtr> bufQue;
     int retval;
@@ -91,38 +112,23 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 
     struct timespec timeout;
 
-    m_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (m_sockfd == -1) {
-        LOG_ERROR(SocketReader, "Failed to create socket file descriptor");
-        m_running = false;
-        return;
-    }
-
-
     if (m_socket_buffer_size) {
-    	if (setsockopt(m_sockfd, SOL_SOCKET, SO_RCVBUF, &m_socket_buffer_size, sizeof(m_socket_buffer_size))) {
-    		LOG_WARN(SocketReader, "Failed to set socket buffer size to requested size");
+    	if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &m_socket_buffer_size, sizeof(m_socket_buffer_size)) != 0) {
+    		LOG_WARN(SocketReader, "Failed to set socket buffer size to the requested size: " << m_socket_buffer_size);
     	}
     }
-
 
     // This is the socket connection time out, if we do not receive data in this amount of time we break out of
     // the recv call.
     struct timeval tv;
     tv.tv_sec = m_timeout;
     tv.tv_usec = 0;
-    setsockopt(m_sockfd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv, sizeof(struct timeval));
+    setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv, sizeof(struct timeval));
     ////
 
 
     socklen_t optlen = sizeof(m_socket_buffer_size);
-    getsockopt(m_sockfd, SOL_SOCKET, SO_RCVBUF, &m_socket_buffer_size, &optlen);
-
-    if (bind(m_sockfd, (struct sockaddr *) &m_addr, sizeof(m_addr)) == -1) {
-    	LOG_ERROR(SocketReader, "Failed to bind to socket");
-		m_running = false;
-		return;
-    }
+    getsockopt(socket, SOL_SOCKET, SO_RCVBUF, &m_socket_buffer_size, &optlen);
 
 	memset(msgs, 0, sizeof(msgs));
 	for (i = 0; i < m_pkts_per_read; i++) {
@@ -147,9 +153,10 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 		timeout.tv_nsec = 0;
 
 		// Get packets
-		//TODO: Should we add the flag MSG_WAITFORONE or MSG_WAITFORALL
+		//TODO: Should we add the flag MSG_WAITFORONE or MSG_WAITALL
 		//TODO: Despite my attempts it seems this gets stuck if it is reading packets and then the packet stream stops.  How do I kill it?
-		retval = recvmmsg(m_sockfd, msgs, m_pkts_per_read, MSG_WAITFORONE, &timeout);
+		//TODO: If we continue to get stuck here we should just setup polling on the socket.
+		retval = recvmmsg(socket, msgs, m_pkts_per_read, MSG_WAITFORONE, &timeout);
 
 		if (retval == -1) {
 			if (m_shuttingDown) {
@@ -162,7 +169,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 			continue;
 		}
 
-		// Push the packets onto the queue
-		pktbuffer->push_full_buffers(bufQue);
+		// Push the packets onto the queue that we've received.
+		pktbuffer->push_full_buffers(bufQue, retval);
     }
 }

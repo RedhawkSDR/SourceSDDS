@@ -1,5 +1,10 @@
 #include "SddsToBulkIOUtils.h"
 
+namespace ENDIANNESS {
+	const std::string BIG_ENDIAN_STR = "4321";
+	const std::string LITTLE_ENDIAN_STR = "1234";
+}
+
 /****************************************************************************************
  * setStartOfYear()
  *
@@ -84,9 +89,6 @@ unsigned short getBps(SDDSpacket* sdds_pkt) {
  */
 void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed) {
 
-	/* Extract the appropriate portions of the SDDSpacket to populate the StreamSRI structure */
-	changed = false;
-
 	CORBA::Double recXdelta = (CORBA::Double)(1.0 / sdds_pkt->get_rate());
 	if (recXdelta != sri.xdelta) {
 		changed = true;
@@ -100,3 +102,78 @@ void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed) {
 	}
 
 } // end function mergeSddsSRI
+
+bool compareSRI(BULKIO::StreamSRI A, BULKIO::StreamSRI B) {
+	bool same = false;
+
+	if ((A.hversion == B.hversion) and (A.xstart == B.xstart) and (A.xunits == B.xunits) and (A.ystart == B.ystart) and (A.ydelta == B.ydelta)
+			and
+			/* these values aren't checked because we get them from the sdds packet headers */
+			//(A.mode == B.mode) and
+			//(A.xdelta == B.xdelta) and
+			//(A.subsize == B.subsize) and
+			(!strcmp(A.streamID, B.streamID))) {
+		same = true;
+	} else {
+		same = false;
+		return same;
+	}
+
+	if (A.keywords.length() != B.keywords.length()) {
+		same = false;
+		return same;
+	}
+
+	for (unsigned int i = 0; i < A.keywords.length(); i++) {
+		std::string action = "ne";
+		if (ossie::compare_anys(A.keywords[i].value, B.keywords[i].value, action)) {
+			same = false;
+			return same;
+		}
+	}
+
+	return same;
+}
+
+void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, std::string &endianness) {
+	if (!compareSRI(currSRI, upstreamSRI)) {
+		changed = true;
+		currSRI.streamID = upstreamSRI.streamID;
+
+		currSRI.hversion = upstreamSRI.hversion;
+		currSRI.xstart = upstreamSRI.xstart;
+
+		/* Platinum time code (1 == seconds) */
+		currSRI.xunits = upstreamSRI.xunits;
+
+		/* # frames to be delivered by pushPacket() call; set to 0 for single packet */
+		currSRI.ystart = upstreamSRI.ystart;
+		currSRI.ydelta = upstreamSRI.ydelta;
+		currSRI.yunits = upstreamSRI.yunits;
+
+		currSRI.keywords.length(upstreamSRI.keywords.length());
+
+		for (unsigned int i = 0; i < currSRI.keywords.length(); i++) {
+			currSRI.keywords[i].id = upstreamSRI.keywords[i].id;
+			currSRI.keywords[i].value = upstreamSRI.keywords[i].value;
+
+			if (std::string(upstreamSRI.keywords[i].id) == "BULKIO_SRI_PRIORITY" || std::string(upstreamSRI.keywords[i].id) == "use_BULKIO_SRI" || std::string(upstreamSRI.keywords[i].id) == "sddsPacketAlt") {
+				useUpstream = true;
+			} else if (std::string(upstreamSRI.keywords[i].id) == "dataRef" || std::string(upstreamSRI.keywords[i].id) == "DATA_REF_STR") {
+				endianness = ossie::any_to_string(upstreamSRI.keywords[i].value);
+				if (endianness == "43981") { // In hex this is 0xabcd
+					endianness = ENDIANNESS::LITTLE_ENDIAN_STR;
+				} else if (endianness == "52651") {
+					endianness = ENDIANNESS::BIG_ENDIAN_STR;
+				}
+
+				currSRI.keywords[i].value <<= CORBA::string_dup(endianness.c_str());
+			}
+		}
+
+		if (useUpstream) {
+			currSRI.xdelta = upstreamSRI.xdelta;
+			currSRI.mode = upstreamSRI.mode;
+		}
+	}
+}

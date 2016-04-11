@@ -8,10 +8,15 @@
 #ifndef SOCKETREADER_H_
 #define SOCKETREADER_H_
 
+#define MAX_ALLOWED_TIMEOUT 3
+
 #include <boost/shared_ptr.hpp>
 #include "sddspacket.h"
 #include "SmartPacketBuffer.h"
 #include "ossie/debug.h"
+#include "socketUtils/multicast.h"
+#include "socketUtils/unicast.h"
+#include "socketUtils/SourceNicUtils.h"
 
 #define SDDS_PACKET_SIZE 1080
 
@@ -28,7 +33,7 @@ public:
     void setTimeout(int timeout);
     void setPktsPerRead(size_t pkts_per_read);
     size_t getPktsPerRead();
-    void setConnectionInfo(std::string ip, uint16_t vlan, uint16_t port);
+    void setConnectionInfo(std::string interface, std::string ip, uint16_t vlan, uint16_t port) throw (BadParameterError);
     void setSocketBufferSize(int socket_buffer_size);
     size_t getSocketBufferSize();
 private:
@@ -36,9 +41,9 @@ private:
     bool m_running;
     int m_timeout;
     size_t m_pkts_per_read;
-    struct sockaddr_in m_addr;
     size_t m_socket_buffer_size;
-	int m_sockfd;
+    multicast_t m_multicast_connection;
+    unicast_t m_unicast_connection;
 };
 
 #endif /* SOCKETREADER_H_ */

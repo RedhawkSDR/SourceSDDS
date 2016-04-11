@@ -51,6 +51,8 @@ public:
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
     	size_t i;
 
+    	m_empty_buffers.clear();
+
     	// Allocate the memory and fill the empty buffers
     	for (i = 0; i < capacity; ++i) {
     		m_empty_buffers.push_back(TypePtr(new T()));
@@ -120,10 +122,10 @@ public:
      * Pushes all the buffers contained in provided container onto the full buffer deque
      * and clears the given container.
      */
-    void push_full_buffers(std::deque<TypePtr> &que) {
+    void push_full_buffers(std::deque<TypePtr> &que, size_t num) {
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
-    	m_full_buffers.insert(m_full_buffers.end(), que.begin(), que.end());
-    	que.clear();
+		m_full_buffers.insert(m_full_buffers.end(), que.begin(), que.begin() + num);
+		que.erase(que.begin(), que.begin() + num);
     	lock.unlock();
 		m_no_full_buffers.notify_one();
     }

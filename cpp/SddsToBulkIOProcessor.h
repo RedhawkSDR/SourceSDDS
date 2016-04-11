@@ -34,12 +34,13 @@ public:
 	void shutDown();
 	void setWaitForTTV(bool wait_for_ttv);
 	void setPushOnTTV(bool push_on_ttv);
-	void setStreamId(std::string stream_id);
+	void setUpstreamSri(BULKIO::StreamSRI upstream_sri);
+	void unsetUpstreamSri();
 	size_t getPktsPerRead();
 	bool getPushOnTTV();
 	bool getWaitOnTTV();
 	unsigned short getBps();
-	long long getNumDropped();
+	unsigned long long getNumDropped();
 	uint16_t getExpectedSequenceNumber();
 private:
 	size_t m_pkts_per_read;
@@ -51,7 +52,8 @@ private:
 	bool m_current_ttv_flag;
 	uint16_t m_expected_seq_number;
 	std::vector<uint8_t> m_bulkIO_data;
-	long long m_last_wsec, m_pkts_dropped;
+	long long m_last_wsec;
+	unsigned long long m_pkts_dropped;
 	time_t m_start_of_year;
 	unsigned short m_bps;
 	BULKIO::StreamSRI m_sri;
@@ -59,7 +61,11 @@ private:
 	bulkio::OutOctetPort *m_octet_out;
 	bulkio::OutShortPort *m_short_out;
 	bulkio::OutFloatPort *m_float_out;
-	std::string m_stream_id;
+	BULKIO::StreamSRI m_upstream_sri;
+	bool m_upstream_sri_set;
+	std::string m_endianness;
+	bool m_new_upstream_sri;
+	bool m_use_upstream_sri;
 
 	void processPackets(std::deque<SddsPacketPtr> &pktsToWork, std::deque<SddsPacketPtr> &pktsToRecycle);
 	bool orderIsValid(SddsPacketPtr &pkt);

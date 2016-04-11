@@ -12,21 +12,16 @@
 PREPARE_LOGGING(SddsToBulkIOProcessor)
 
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
-	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_stream_id("DEFAULT_STREAM_ID")
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false)
 {
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
+
+	// Needs to be initialized.
+	m_sri.streamID = "DEFAULT_SDDS_STREAM_ID";
 }
 
 SddsToBulkIOProcessor::~SddsToBulkIOProcessor() {
-}
-
-void SddsToBulkIOProcessor::setStreamId(std::string stream_id) {
-	if (m_running) {
-		LOG_WARN(SddsToBulkIOProcessor, "Cannot set stream ID while running");
-		return;
-	}
-	m_stream_id = stream_id;
 }
 
 void SddsToBulkIOProcessor::setPktsPerRead(size_t pkts_per_read) {
@@ -115,6 +110,7 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 		m_current_ttv_flag = pkt->get_ttv();
 		m_expected_seq_number = pkt->get_seq() + 1;
 		m_bps = pkt->bps;
+		std::cout << "YLB YLB Setting m_bps to: " << m_bps << std::endl;
 
 		// Adjust for the CRC packet
 		if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
@@ -126,7 +122,7 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 	// If it doesn't match what we're expecting then it's not valid.
 	if (m_expected_seq_number != pkt->get_seq()) {
 		LOG_WARN(SddsToBulkIOProcessor, "Expected packet " << m_expected_seq_number << " Received: " << pkt->get_seq());
-		// TODO: Calculate accurately the number of packets dropped
+		m_pkts_dropped += pkt->get_seq() - m_expected_seq_number; // eg. got 7, expected 5, 7-5, dropped 2.
 		m_first_packet = true;
 		return false;
 	}
@@ -180,9 +176,17 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 
 			// At this point we should have a good packet and have dealt with any specific user requests regarding the ttv field.
-			// Grab and push SRI if we need it
-			bool sriChanged;
-			mergeSddsSRI(pkt.get(), m_sri, sriChanged);
+
+			// We can assume that the SDDS streams SRI (xdelta) should stay the same for a given stream.
+			bool sriChanged = false;
+			if (m_upstream_sri_set && m_new_upstream_sri) {
+				m_new_upstream_sri = false;
+				mergeUpstreamSRI(m_sri, m_upstream_sri, m_use_upstream_sri, sriChanged, m_endianness);
+			}
+
+			if (!m_use_upstream_sri) {
+				mergeSddsSRI(pkt.get(), m_sri, sriChanged);
+			}
 
 			if (sriChanged) {
 				pushPacket();
@@ -195,11 +199,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 				m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_wsec, m_start_of_year);
 			}
 
-			// TODO: Deal with endianness.
-
-
-			// Copying the data of the current packet into the bulkIO data vector
-			//XXX: I wasnt sure if sizeof(pkt->d) would work but it does return 1024.
+			//XXX: I wasn't sure if sizeof(pkt->d) would work but it does return 1024.
 			m_bulkIO_data.insert(m_bulkIO_data.end(), pkt->d, pkt->d + sizeof(pkt->d));
 
 			// And we are done with this packet. Take it off the pktsToWork que and add it to the pktsToRecycle que.
@@ -246,25 +246,38 @@ void SddsToBulkIOProcessor::pushPacket() {
 
 	switch(m_bps) {
 	case 8:
-		if (m_octet_out->getCurrentSRI().count(m_stream_id)==0) {
+		if (m_octet_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
 			m_octet_out->pushSRI(m_sri);
 		}
 
-		m_octet_out->pushPacket(m_bulkIO_data, m_bulkio_time_stamp, false, m_stream_id);
+		m_octet_out->pushPacket(m_bulkIO_data, m_bulkio_time_stamp, false, m_sri.streamID.in());
 		break;
 	case 16:
-		if (m_short_out->getCurrentSRI().count(m_stream_id)==0) {
+		if (m_short_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
 			m_short_out->pushSRI(m_sri);
 		}
 
-		m_short_out->pushPacket(reinterpret_cast<short*> (&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(short), m_bulkio_time_stamp, false, m_stream_id);
+		// Ugh, we need to byte swap. At least there is a nice builtin for swapping bytes for shorts.
+		if (!m_endianness.empty() && m_endianness != "" && atol(m_endianness.c_str()) != __BYTE_ORDER) {
+			swab(&m_bulkIO_data[0], &m_bulkIO_data[0], m_bulkIO_data.size());
+		}
+
+		m_short_out->pushPacket(reinterpret_cast<short*> (&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(short), m_bulkio_time_stamp, false, m_sri.streamID.in());
 		break;
 	case 32:
-		if (m_float_out->getCurrentSRI().count(m_stream_id)==0) {
+		if (m_float_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
 			m_float_out->pushSRI(m_sri);
 		}
 
-		m_float_out->pushPacket(reinterpret_cast<float*>(&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(float), m_bulkio_time_stamp, false, m_stream_id);
+		// Ugh, we need to byte swap and for floats there is no nice method for us to use like their is for shorts. Time to iterate.
+		if (!m_endianness.empty() && m_endianness != "" && atol(m_endianness.c_str()) != __BYTE_ORDER) {
+			float *buf = reinterpret_cast<float*>(&m_bulkIO_data[0]);
+			for (size_t i = 0; i < m_bulkIO_data.size() / sizeof(float); ++i) {
+				buf[i] = __builtin_bswap32(buf[i]);
+			}
+		}
+
+		m_float_out->pushPacket(reinterpret_cast<float*>(&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(float), m_bulkio_time_stamp, false, m_sri.streamID.in());
 		break;
 	default:
 		LOG_ERROR(SddsToBulkIOProcessor, "Could not push packet, the bits per sample are non-standard and set to: " << m_bps);
@@ -286,10 +299,27 @@ unsigned short SddsToBulkIOProcessor::getBps() {
 	return m_bps;
 }
 
-long long SddsToBulkIOProcessor::getNumDropped() {
+unsigned long long SddsToBulkIOProcessor::getNumDropped() {
 	return m_pkts_dropped;
 }
 
 uint16_t SddsToBulkIOProcessor::getExpectedSequenceNumber() {
 	return m_expected_seq_number;
+}
+
+void SddsToBulkIOProcessor::setUpstreamSri(BULKIO::StreamSRI upstream_sri) {
+	m_upstream_sri_set = true;
+	m_new_upstream_sri = true;
+	m_upstream_sri = upstream_sri;
+}
+
+void SddsToBulkIOProcessor::unsetUpstreamSri() {
+	//TODO: This will likely be called in another thread and may cause stability issues if we are currently running.
+	// I rather not add a lock but probably should if this is going to be called while the component is running.
+	if (m_running) {
+		LOG_WARN(SddsToBulkIOProcessor, "Unsetting upstream SRI while running may cause stability issues.")
+	}
+	m_use_upstream_sri = false;
+	m_upstream_sri_set = false;
+	m_endianness = "";
 }

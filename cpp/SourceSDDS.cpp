@@ -25,6 +25,8 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 
 	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
 	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
+
+	m_attach_stream.attached = false;
 }
 
 SourceSDDS_i::~SourceSDDS_i()
@@ -137,7 +139,18 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	//////////////////////////////////////////
 	// Setup the socketReader
 	//////////////////////////////////////////
-	setupSocketReaderOptions();
+	if (not m_attach_stream.attached && not attachment_override.enabled) {
+		LOG_ERROR(SourceSDDS_i, "Cannot setup the socket reader without either a successful attach or attachment override set");
+		return;
+	}
+
+	try {
+		setupSocketReaderOptions();
+	} catch (BadParameterError &e) {
+		LOG_ERROR(SourceSDDS_i, "Failed to setup socket reader options: " << e.what());
+		return;
+	}
+
 	m_socketReaderThread = new boost::thread(boost::bind(&SocketReader::run, boost::ref(m_socketReader), &m_pktbuffer));
 
 	// Attempt to set the affinity of the socket reader thread if the user has told us to.
@@ -174,16 +187,69 @@ void SourceSDDS_i::stop () throw (CF::Resource::StopError, CORBA::SystemExceptio
  * Sets the IP and port on the class socket reader from either the SDDS port or the properties depending on
  * override settings.
  */
-void SourceSDDS_i::setupSocketReaderOptions() {
+void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
 	if (attachment_override.enabled) {
-		m_socketReader.setConnectionInfo(attachment_override.ip_address, attachment_override.vlan, attachment_override.port);
+		m_socketReader.setConnectionInfo(interface, attachment_override.ip_address, attachment_override.vlan, attachment_override.port);
 	} else {
-		// TODO: Get the settings from the SDDS port
+		m_socketReader.setConnectionInfo(interface, m_attach_stream.multicastAddress, m_attach_stream.vlan, m_attach_stream.port);
 	}
 
 	m_socketReader.setPktsPerRead(advanced_optimizations.pkts_per_socket_read);
+}
 
+std::string SourceSDDS_i::attach(BULKIO::SDDSStreamDefinition stream, std::string userid) {
+	if (m_attach_stream.attached) {
+		LOG_ERROR(SourceSDDS_i, "Can only handle a single attach. Detach current stream: " << m_attach_stream.id);
+		return "";
+	}
 
+	bool restart = false;
+
+	if (started() && !attachment_override.enabled) {
+		LOG_WARN(SourceSDDS_i, "Cannot setup connection via attach when already running, will stop, attach, and restart");
+		restart = true;
+		stop();
+	}
+
+	m_attach_stream.attached = true;
+	m_attach_stream.dataFormat = stream.dataFormat;
+	m_attach_stream.id = stream.id;
+	m_attach_stream.multicastAddress = stream.multicastAddress;
+	m_attach_stream.port = stream.port;
+	m_attach_stream.sampleRate = stream.sampleRate;
+	m_attach_stream.timeTagValid = stream.timeTagValid;
+	m_attach_stream.vlan = stream.vlan;
+
+	// XXX: If attachment_override is set should we still accept SRIs from the bulkIO port?
+	m_sddsToBulkIO.setUpstreamSri(sdds_in->attachedSRIs()->get_buffer()[0]);
+
+	if (restart) {
+		start();
+	}
+
+	return m_attach_stream.id;
+}
+
+void SourceSDDS_i::detach(std::string attachId) {
+
+	if (attachId != m_attach_stream.id) {
+		LOG_ERROR(SourceSDDS_i, "ATTACHMENT ID (STREAM ID) NOT FOUND FOR: " << attachId);
+		throw BULKIO::dataSDDS::DetachError("Detach called on stream not currently running");
+	}
+
+	bool restart = false;
+	if (started() && !attachment_override.enabled) {
+		LOG_WARN(SourceSDDS_i, "Cannot remove in-use connection via detach when already running, will stop, detach, and restart");
+		restart = true;
+		stop();
+	}
+
+	m_sddsToBulkIO.unsetUpstreamSri();
+	m_attach_stream.attached = false;
+
+	if (restart) {
+		start();
+	}
 }
 
 void SourceSDDS_i::setupSddsToBulkIOOptions() {

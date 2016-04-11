@@ -8,17 +8,7 @@
 #include "socketUtils/SourceNicUtils.h"
 #include <uuid/uuid.h>
 
-namespace UUID_HELPER {
-    inline std::string new_uuid() {
-        uuid_t new_random_uuid;
-        uuid_generate_random(new_random_uuid);
-        char new_random_uuid_str[38];
-        uuid_unparse(new_random_uuid, new_random_uuid_str);
-        return std::string(new_random_uuid_str);
-    }
-}
-
-class SourceSDDS_i : public SourceSDDS_base
+class SourceSDDS_i : public SourceSDDS_base, public bulkio::InSDDSPort::Callback
 {
     ENABLE_LOGGING
     public:
@@ -29,8 +19,8 @@ class SourceSDDS_i : public SourceSDDS_base
         void start() throw (CORBA::SystemException, CF::Resource::StartError);
         void stop () throw (CF::Resource::StopError, CORBA::SystemException);
         int serviceFunction();
-        std::string attach(BULKIO::SDDSStreamDefinition stream, std::string userid);
-        void detach(std::string attachId);
+        char* attach(const BULKIO::SDDSStreamDefinition& stream, const char* userid) throw (BULKIO::dataSDDS::AttachError, BULKIO::dataSDDS::StreamInputError);
+		void detach(const char* attachId);
     private:
         SmartPacketBuffer<SDDSpacket> m_pktbuffer;
 

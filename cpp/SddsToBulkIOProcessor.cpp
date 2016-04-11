@@ -101,37 +101,27 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
  * Increments the expected sequence number if true.
  * If the packet does not match the expected, we calculate packets dropped and reset first packet
  */
-// TODO: How should we deal with out of order packets?  Right now we don't they are considered a drop, and a big one, then another drop.
 bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 
 	// First packet, its valid.
 	if (m_first_packet) {
 		m_first_packet = false;
 		m_current_ttv_flag = pkt->get_ttv();
-		m_expected_seq_number = pkt->get_seq() + 1;
+		m_expected_seq_number = pkt->get_seq();
 		m_bps = pkt->bps;
-		std::cout << "YLB YLB Setting m_bps to: " << m_bps << std::endl;
-
-		// Adjust for the CRC packet
-		if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
-			m_expected_seq_number++;
 
 		return true;
 	}
 
 	// If it doesn't match what we're expecting then it's not valid.
 	if (m_expected_seq_number != pkt->get_seq()) {
-		LOG_WARN(SddsToBulkIOProcessor, "Expected packet " << m_expected_seq_number << " Received: " << pkt->get_seq());
-		m_pkts_dropped += pkt->get_seq() - m_expected_seq_number; // eg. got 7, expected 5, 7-5, dropped 2.
+		// No need to worry about the wrap around, if everything is uint16_t twos compliment takes care of it all for us.
+		uint16_t numDropped = pkt->get_seq() - m_expected_seq_number;
+		LOG_WARN(SddsToBulkIOProcessor, "Expected packet " << m_expected_seq_number << " Received: " << pkt->get_seq() << " Dropped: " << numDropped);
+		m_pkts_dropped += numDropped;
 		m_first_packet = true;
 		return false;
 	}
-
-	m_expected_seq_number++;
-
-	// Adjust for the CRC packet
-	if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
-		m_expected_seq_number++;
 
 	return true;
 }
@@ -205,6 +195,14 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			// And we are done with this packet. Take it off the pktsToWork que and add it to the pktsToRecycle que.
 			pktsToRecycle.push_back(pkt);
 			pkt_it = pktsToWork.erase(pkt_it);
+
+			// Now that we are officially done with the packet we can increment our packet counter
+			m_expected_seq_number++;
+
+			// Adjust for the CRC packet
+			if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
+				m_expected_seq_number++;
+
 
 			// We've worked through the full stack of packets, push the data and clear the buffer
 			if (pkt_it == pktsToWork.end()) {

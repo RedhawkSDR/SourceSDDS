@@ -13,3 +13,7 @@ cpp/configure
 cpp/depcomp
 cpp/install-sh
 cpp/missing
+tests/*.xml
+*.pyc
+*.deps
+.dirstamp

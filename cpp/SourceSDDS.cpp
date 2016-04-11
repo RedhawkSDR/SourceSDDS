@@ -26,6 +26,8 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
 	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
 
+	sdds_in->setNewAttachDetachCallback(this);
+
 	m_attach_stream.attached = false;
 }
 
@@ -197,10 +199,10 @@ void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
 	m_socketReader.setPktsPerRead(advanced_optimizations.pkts_per_socket_read);
 }
 
-std::string SourceSDDS_i::attach(BULKIO::SDDSStreamDefinition stream, std::string userid) {
+char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const char* userid) throw (BULKIO::dataSDDS::AttachError, BULKIO::dataSDDS::StreamInputError) {
 	if (m_attach_stream.attached) {
 		LOG_ERROR(SourceSDDS_i, "Can only handle a single attach. Detach current stream: " << m_attach_stream.id);
-		return "";
+		throw BULKIO::dataSDDS::AttachError("Can only handle a single attach. Detach current stream first");
 	}
 
 	bool restart = false;
@@ -221,16 +223,25 @@ std::string SourceSDDS_i::attach(BULKIO::SDDSStreamDefinition stream, std::strin
 	m_attach_stream.vlan = stream.vlan;
 
 	// XXX: If attachment_override is set should we still accept SRIs from the bulkIO port?
-	m_sddsToBulkIO.setUpstreamSri(sdds_in->attachedSRIs()->get_buffer()[0]);
+	// TODO: What does this all mean?
+	if (sdds_in->attachedSRIs()->length() > 0) {
+		m_sddsToBulkIO.setUpstreamSri(sdds_in->attachedSRIs()->get_buffer()[0]);
+	} else {
+		LOG_WARN(SourceSDDS_i, "Received attach but there is no SRI.");
+	}
 
 	if (restart) {
 		start();
 	}
 
-	return m_attach_stream.id;
+	if (m_attach_stream.id.empty() || m_attach_stream.id == "") {
+		m_attach_stream.id = ossie::generateUUID();
+	}
+
+	return CORBA::string_dup(m_attach_stream.id.c_str());
 }
 
-void SourceSDDS_i::detach(std::string attachId) {
+void SourceSDDS_i::detach(const char* attachId) {
 
 	if (attachId != m_attach_stream.id) {
 		LOG_ERROR(SourceSDDS_i, "ATTACHMENT ID (STREAM ID) NOT FOUND FOR: " << attachId);

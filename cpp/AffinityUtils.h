@@ -176,23 +176,26 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 	return rx_queue;
 }
 
-int setPolicyAndPriority(pthread_t thread, int policy, int priority, std::string thread_desc) {
+int setPolicyAndPriority(pthread_t thread, int priority, std::string thread_desc) {
 	struct sched_param param;
 	int retVal = 0;
-	if (policy != NOT_SET) {
-		std::cout << "YLB YLB YLB SETTING THE POLICY AND PRIORITY OF THREAD: " << thread_desc << std::endl;
-		param.sched_priority = priority;
-		retVal = pthread_setschedparam(thread, policy, &param);
-		if (retVal != 0) {
-			RH_NL_WARN("SourceSDDSUtils", "Failed to set " << thread_desc << " policy and priority. Permissions may prevent this or values provided may be invalid");
-		}
+	param.sched_priority = priority;
+
+	if (priority > 0) {
+		retVal = pthread_setschedparam(thread, SCHED_RR, &param);
+	} else if (priority == 0) {
+		retVal = pthread_setschedparam(thread, SCHED_OTHER, &param);
+	}
+
+	if (retVal != 0) {
+		RH_NL_WARN("SourceSDDSUtils", "Failed to set " << thread_desc << " policy and priority. Permissions may prevent this or values provided may be invalid");
 	}
 
 	return retVal;
 }
 
-int getPolicyAndPriority(pthread_t thread, int &policy, int &priority, std::string thread_desc) {
-	int retVal = 0;
+int getPriority(pthread_t thread, int &priority, std::string thread_desc) {
+	int retVal = 0, policy;
 	struct sched_param param;
 	retVal = pthread_getschedparam(thread, &policy, &param);
 	if (retVal != 0) {

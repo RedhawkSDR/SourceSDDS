@@ -20,9 +20,7 @@ struct advanced_optimizations_struct {
         sdds_pkts_per_bulkio_push = 1000;
         socket_read_thread_affinity = "";
         sdds_to_bulkio_thread_affinity = "";
-        socket_read_thread_scheduling_policy = 3;
         socket_read_thread_priority = -1;
-        sdds_to_bulkio_thread_scheduling_policy = 3;
         sdds_to_bulkio_thread_priority = -1;
     };
 
@@ -36,9 +34,7 @@ struct advanced_optimizations_struct {
     unsigned short sdds_pkts_per_bulkio_push;
     std::string socket_read_thread_affinity;
     std::string sdds_to_bulkio_thread_affinity;
-    CORBA::Long socket_read_thread_scheduling_policy;
     CORBA::Long socket_read_thread_priority;
-    CORBA::Long sdds_to_bulkio_thread_scheduling_policy;
     CORBA::Long sdds_to_bulkio_thread_priority;
 };
 
@@ -64,14 +60,8 @@ inline bool operator>>= (const CORBA::Any& a, advanced_optimizations_struct& s) 
     if (props.contains("advanced_optimizations::work_thread_affinity")) {
         if (!(props["advanced_optimizations::work_thread_affinity"] >>= s.sdds_to_bulkio_thread_affinity)) return false;
     }
-    if (props.contains("advanced_optimizations::socket_read_thread_scheduling_policy")) {
-        if (!(props["advanced_optimizations::socket_read_thread_scheduling_policy"] >>= s.socket_read_thread_scheduling_policy)) return false;
-    }
     if (props.contains("advanced_optimizations::socket_read_thread_priority")) {
         if (!(props["advanced_optimizations::socket_read_thread_priority"] >>= s.socket_read_thread_priority)) return false;
-    }
-    if (props.contains("advanced_optimizations::sdds_to_bulkio_thread_scheduling_policy")) {
-        if (!(props["advanced_optimizations::sdds_to_bulkio_thread_scheduling_policy"] >>= s.sdds_to_bulkio_thread_scheduling_policy)) return false;
     }
     if (props.contains("advanced_optimizations::sdds_to_bulkio_thread_priority")) {
         if (!(props["advanced_optimizations::sdds_to_bulkio_thread_priority"] >>= s.sdds_to_bulkio_thread_priority)) return false;
@@ -94,11 +84,7 @@ inline void operator<<= (CORBA::Any& a, const advanced_optimizations_struct& s) 
  
     props["advanced_optimizations::work_thread_affinity"] = s.sdds_to_bulkio_thread_affinity;
  
-    props["advanced_optimizations::socket_read_thread_scheduling_policy"] = s.socket_read_thread_scheduling_policy;
- 
     props["advanced_optimizations::socket_read_thread_priority"] = s.socket_read_thread_priority;
- 
-    props["advanced_optimizations::sdds_to_bulkio_thread_scheduling_policy"] = s.sdds_to_bulkio_thread_scheduling_policy;
  
     props["advanced_optimizations::sdds_to_bulkio_thread_priority"] = s.sdds_to_bulkio_thread_priority;
     a <<= props;
@@ -117,11 +103,7 @@ inline bool operator== (const advanced_optimizations_struct& s1, const advanced_
         return false;
     if (s1.sdds_to_bulkio_thread_affinity!=s2.sdds_to_bulkio_thread_affinity)
         return false;
-    if (s1.socket_read_thread_scheduling_policy!=s2.socket_read_thread_scheduling_policy)
-        return false;
     if (s1.socket_read_thread_priority!=s2.socket_read_thread_priority)
-        return false;
-    if (s1.sdds_to_bulkio_thread_scheduling_policy!=s2.sdds_to_bulkio_thread_scheduling_policy)
         return false;
     if (s1.sdds_to_bulkio_thread_priority!=s2.sdds_to_bulkio_thread_priority)
         return false;

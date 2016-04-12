@@ -33,26 +33,8 @@
       <description>Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which consumes packets from internal buffer, and sends out bulkio</description>
       <value></value>
     </simple>
-    <simple id="advanced_optimizations::socket_read_thread_scheduling_policy" name="socket_read_thread_scheduling_policy" type="long">
-      <value>3</value>
-      <enumerations>
-        <enumeration label="SCHED_FIFO" value="1"/>
-        <enumeration label="SCHED_RR" value="2"/>
-        <enumeration label="SCHED_OTHER" value="0"/>
-        <enumeration label="NOT_SET" value="3"/>
-      </enumerations>
-    </simple>
     <simple id="advanced_optimizations::socket_read_thread_priority" name="socket_read_thread_priority" type="long">
       <value>-1</value>
-    </simple>
-    <simple id="advanced_optimizations::sdds_to_bulkio_thread_scheduling_policy" name="sdds_to_bulkio_thread_scheduling_policy" type="long">
-      <value>3</value>
-      <enumerations>
-        <enumeration label="NOT_SET" value="3"/>
-        <enumeration label="SCHED_FIFO" value="1"/>
-        <enumeration label="SCHED_RR" value="2"/>
-        <enumeration label="SCHED_OTHER" value="0"/>
-      </enumerations>
     </simple>
     <simple id="advanced_optimizations::sdds_to_bulkio_thread_priority" name="sdds_to_bulkio_thread_priority" type="long">
       <value>-1</value>

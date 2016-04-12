@@ -85,18 +85,16 @@ struct advanced_optimizations_struct SourceSDDS_i::get_advanced_optimizations_st
 	retVal.udp_socket_buffer_size = m_socketReader.getSocketBufferSize();
 
 	if (m_sddsToBulkIOThread) {
-		getPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_scheduling_policy, advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
+		getPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
 	}
 
 	if (m_socketReaderThread) {
-		getPolicyAndPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_scheduling_policy, advanced_optimizations.socket_read_thread_priority, "socket reader thread");
+		getPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_priority, "socket reader thread");
 	}
 
 	// Set to the struct version right now in case NOT_SET and then check to see if threads are up and get actuals
-	retVal.sdds_to_bulkio_thread_scheduling_policy = advanced_optimizations.sdds_to_bulkio_thread_scheduling_policy;
 	retVal.sdds_to_bulkio_thread_priority = advanced_optimizations.sdds_to_bulkio_thread_priority;
 	retVal.socket_read_thread_priority = advanced_optimizations.socket_read_thread_priority;
-	retVal.socket_read_thread_scheduling_policy = advanced_optimizations.socket_read_thread_scheduling_policy;
 
 	return retVal;
 }
@@ -149,18 +147,16 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
 		LOG_WARN(SourceSDDS_i, "Cannot set the socket buffer size while the component is running");
 	}
 
-	advanced_optimizations.socket_read_thread_scheduling_policy = request.socket_read_thread_scheduling_policy;
 	advanced_optimizations.socket_read_thread_priority = request.socket_read_thread_priority;
 
 	if (m_socketReaderThread) {
-		setPolicyAndPriority(m_socketReaderThread->native_handle(), request.socket_read_thread_scheduling_policy, request.socket_read_thread_priority, "socket reader thread");
+		setPolicyAndPriority(m_socketReaderThread->native_handle(), request.socket_read_thread_priority, "socket reader thread");
 	}
 
-	advanced_optimizations.sdds_to_bulkio_thread_scheduling_policy = request.sdds_to_bulkio_thread_scheduling_policy;
 	advanced_optimizations.sdds_to_bulkio_thread_priority = request.sdds_to_bulkio_thread_priority;
 
 	if (m_sddsToBulkIOThread) {
-		setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), request.sdds_to_bulkio_thread_scheduling_policy, request.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
+		setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), request.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
 	}
 }
 
@@ -199,7 +195,7 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	}
 
 	advanced_optimizations.socket_read_thread_affinity = getAffinity(m_socketReaderThread->native_handle());
-	setPolicyAndPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_scheduling_policy, advanced_optimizations.socket_read_thread_priority, "socket reader thread");
+	setPolicyAndPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_priority, "socket reader thread");
 
 	//////////////////////////////////////////
 	// Now setup the packet processor
@@ -213,7 +209,7 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	}
 
 	advanced_optimizations.sdds_to_bulkio_thread_affinity = getAffinity(m_sddsToBulkIOThread->native_handle());
-	setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_scheduling_policy, advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
+	setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
 
 	// Call the parent start
 	SourceSDDS_base::start();

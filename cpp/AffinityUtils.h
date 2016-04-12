@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <boost/lexical_cast.hpp>
+#include "ossie/debug.h"
 
 template <typename T>
 T ConvertString(const std::string &data, bool &success)
@@ -91,7 +92,7 @@ std::string getAffinity(pthread_t thread) {
 	/* Check the actual affinity mask assigned to the thread */
 	s = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 	if (s != 0) {
-		// TODO: Log error
+		RH_NL_WARN("SourceSDDSUtils", "Could not get affinity for given thread");
 		return "";
 	}
 
@@ -148,7 +149,7 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 
 	match = strstr (buffer, ss.str().c_str());
 	if (match == NULL) {
-		//TODO: Log some errors.
+		RH_NL_DEBUG("SourceSDDSUtils", "In parsing /proc/net/udp the IP and port not found, is socket bound?");
 		return 0;
 	}
 
@@ -160,7 +161,7 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 	std::string rx_queue_str(tx_rx_queue);
 	std::size_t colon_pos = rx_queue_str.find(':');
 	if (colon_pos == std::string::npos) {
-		// didnt find it.
+		RH_NL_WARN("SourceSDDSUtils", "Failed to properly parse the UDP socket buffer information from /proc/net/udp");
 		return 0;
 	}
 	rx_queue_str = rx_queue_str.substr(colon_pos+1, rx_queue_str.size());
@@ -174,5 +175,34 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 
 	return rx_queue;
 }
+
+int setPolicyAndPriority(pthread_t thread, int policy, int priority, std::string thread_desc) {
+	struct sched_param param;
+	int retVal = 0;
+	if (policy != NOT_SET) {
+		std::cout << "YLB YLB YLB SETTING THE POLICY AND PRIORITY OF THREAD: " << thread_desc << std::endl;
+		param.sched_priority = priority;
+		retVal = pthread_setschedparam(thread, policy, &param);
+		if (retVal != 0) {
+			RH_NL_WARN("SourceSDDSUtils", "Failed to set " << thread_desc << " policy and priority. Permissions may prevent this or values provided may be invalid");
+		}
+	}
+
+	return retVal;
+}
+
+int getPolicyAndPriority(pthread_t thread, int &policy, int &priority, std::string thread_desc) {
+	int retVal = 0;
+	struct sched_param param;
+	retVal = pthread_getschedparam(thread, &policy, &param);
+	if (retVal != 0) {
+		RH_NL_WARN("SourceSDDSUtils", "Could not get priority of the " << thread_desc);
+	} else {
+		priority = param.sched_priority;
+	}
+
+	return retVal;
+}
+
 
 #endif

@@ -7,6 +7,7 @@
 #include "SddsToBulkIOProcessor.h"
 #include "socketUtils/SourceNicUtils.h"
 #include <uuid/uuid.h>
+#define NOT_SET 3
 
 class SourceSDDS_i : public SourceSDDS_base, public bulkio::InSDDSPort::Callback
 {

@@ -110,4 +110,69 @@ std::string getAffinity(pthread_t thread) {
 	return stream.str();
 }
 
+static uint64_t get_rx_queue(std::string ip, uint16_t port) {
+	// Im not super happy with this but there doesnt seem to be any other API to get the current
+	// buffer "fullness" other than the proc file system....so we're file parsing in C++ to get a kernel
+	// value.
+
+	// Taken from: http://www.makelinux.net/alp/050
+
+	FILE* fp;
+	char buffer[1024*1024];  // Too big?
+	size_t bytes_read;
+	char* match;
+
+	// local_address rem_address   st tx_queue:rx_queue
+	char local_address[128];
+	char rem_address[128];
+	char st[128];
+	char tx_rx_queue[128];
+
+	/* Read the entire contents of /proc/cpuinfo into the buffer.  */
+	fp = fopen ("/proc/net/udp", "r");
+	bytes_read = fread (buffer, 1, sizeof (buffer), fp);
+	fclose (fp);
+
+	/* Bail if read failed or if buffer isn't big enough.  */
+	if (bytes_read == 0 || bytes_read == sizeof (buffer)) {
+	 return 0;
+	}
+
+	/* NUL-terminate the text.  */
+	buffer[bytes_read] = '\0';
+
+	/* Locate the line that starts with our ip and port  */
+	in_addr_t ip_add = inet_addr(ip.c_str());
+	std::stringstream ss;
+	ss << std::uppercase << std::hex << ip_add << ":" << port;
+
+	match = strstr (buffer, ss.str().c_str());
+	if (match == NULL) {
+		//TODO: Log some errors.
+		return 0;
+	}
+
+
+	/* Parse the line to extract the clock speed.  */
+	// 00000000:0801 00000000:0000 07 00000000:00000000
+	sscanf (match, "%s %s %s %s", &local_address[0], &rem_address[0], &st[0], &tx_rx_queue[0]);
+
+	std::string rx_queue_str(tx_rx_queue);
+	std::size_t colon_pos = rx_queue_str.find(':');
+	if (colon_pos == std::string::npos) {
+		// didnt find it.
+		return 0;
+	}
+	rx_queue_str = rx_queue_str.substr(colon_pos+1, rx_queue_str.size());
+
+	bool success;
+	uint64_t rx_queue = ConvertString<uint64_t>(rx_queue_str, success);
+
+	if (!success) {
+		return 0;
+	}
+
+	return rx_queue;
+}
+
 #endif

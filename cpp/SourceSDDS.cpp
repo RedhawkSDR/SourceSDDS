@@ -38,20 +38,29 @@ SourceSDDS_i::~SourceSDDS_i()
 struct status_struct SourceSDDS_i::get_status_struct() {
 	struct status_struct retVal;
 	retVal.bits_per_sample = m_sddsToBulkIO.getBps();
+
 	float percent = 100*(float) m_pktbuffer.get_num_full_buffers() / (float) advanced_optimizations.buffer_size;
 	std::stringstream ss;
 	ss.precision(2);
-	ss << m_pktbuffer.get_num_full_buffers() << " (" << percent << "%)";
+	ss << std::fixed << m_pktbuffer.get_num_full_buffers() << " (" << percent << "%)";
 	retVal.buffers_to_work = ss.str();
 	ss.str("");
 
 	percent = 100*(float) m_pktbuffer.get_num_empty_buffers() / (float) advanced_optimizations.buffer_size;
-	ss << m_pktbuffer.get_num_empty_buffers() << " (" << percent << "%)";
+	ss << std::fixed << m_pktbuffer.get_num_empty_buffers() << " (" << percent << "%)";
 	retVal.empty_buffers_available = ss.str();
+	ss.str("");
 
 	retVal.dropped_packets = m_sddsToBulkIO.getNumDropped();
 
 	retVal.expected_sequence_number = m_sddsToBulkIO.getExpectedSequenceNumber();
+
+	// Not 100% sure why but the queue can actually get about 280 bytes larger than the set max. I guess linux gives 110% har har har (not actually 110%)
+	uint64_t rx_queue = get_rx_queue(attachment_override.ip_address, attachment_override.port);
+	percent = 100*(float) rx_queue / (float) m_socketReader.getSocketBufferSize();
+	ss << std::fixed << rx_queue << " (" << percent << "%)";
+	retVal.udp_socket_buffer_queue = ss.str();
+	ss.str("");
 
 	return retVal;
 }
@@ -223,11 +232,10 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 	m_attach_stream.vlan = stream.vlan;
 
 	// XXX: If attachment_override is set should we still accept SRIs from the bulkIO port?
-	// TODO: What does this all mean?
 	if (sdds_in->attachedSRIs()->length() > 0) {
 		m_sddsToBulkIO.setUpstreamSri(sdds_in->attachedSRIs()->get_buffer()[0]);
 	} else {
-		LOG_WARN(SourceSDDS_i, "Received attach but there is no SRI.");
+		LOG_DEBUG(SourceSDDS_i, "Received attach but there is no SRI.");
 	}
 
 	if (restart) {

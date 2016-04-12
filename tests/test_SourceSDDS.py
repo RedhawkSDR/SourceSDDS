@@ -479,19 +479,13 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get data
         data = sink.getData()
-
+        
         # Validate correct amount of data was received
         self.assertEqual(len(data), 1024)
 
-        # Validate data is correct
-        # The first packet filled, the second is empty
-        # XXX: YLB - Why is the second packet empty? There was good data there we've just dropped. How should we deal with dropped packets?  Pad with zeros? In this case that would create a ton of data (65536 additional packets)
-        # XXX: Why not push all the data we have, bulkIO is time stamped so if we are collecting data, find we are missing a packet, we should stop buffering, send what we have, then start buffering again. (This was the advice from drwille)
-
-        print ("YLB YLB YLB Take a look at this test, I dont think its correct")
-        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('512h', *data[:512]))))
-        self.assertEqual(list(struct.unpack('>512H', struct.pack('512h', *data[512:1024]))), [0] * 512)
-        self.assertEqual(self.comp.status.dropped_packets, 0)
+        #         self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('512h', *data[:512]))))
+        self.assertEqual(2*fakeData, list(struct.unpack('>1024H', struct.pack('1024h', *data[:]))))
+        self.assertEqual(self.comp.status.dropped_packets, 65535)
         sink.stop()
         
         

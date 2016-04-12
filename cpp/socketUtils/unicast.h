@@ -33,5 +33,4 @@ void unicast_close(unicast_t socket);
 #endif
 
 
-
 #endif /* UNICAST_H */

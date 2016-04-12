@@ -3,7 +3,7 @@
 8bfcd22353c3a57fee561ad86ee2a56b  reconf
 d99bf51118d46c725b91f7e0fcbd82e0  configure.ac
 e0eff76c70b7eb0426233c243ec8f328  Makefile.am
-8f2e40bf4d3fa26a8407c16b1a85320b  struct_props.h
+149f4944ef61cb4e183a3e17c575cc8d  struct_props.h
 780030ed0329789998a4a3e4e151fdbc  SourceSDDS.h
 239478e762c41bc33014e5abef99597b  SourceSDDS.cpp
 b87651ea3565402473fb088004430fbf  build.sh

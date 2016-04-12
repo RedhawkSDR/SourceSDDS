@@ -87,6 +87,9 @@
       <description>The amount (and percentage of total) of full buffers needing to be converted to bulkIO</description>
       <value></value>
     </simple>
+    <simple id="status::udp_socket_buffer_queue" name="udp_socket_buffer_queue" type="string">
+      <value></value>
+    </simple>
     <configurationkind kindtype="property"/>
   </struct>
 </properties>

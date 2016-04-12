@@ -220,6 +220,7 @@ struct status_struct {
         bits_per_sample = 0;
         empty_buffers_available = "";
         buffers_to_work = "";
+        udp_socket_buffer_queue = "";
     };
 
     static std::string getId() {
@@ -231,6 +232,7 @@ struct status_struct {
     unsigned short bits_per_sample;
     std::string empty_buffers_available;
     std::string buffers_to_work;
+    std::string udp_socket_buffer_queue;
 };
 
 inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
@@ -252,6 +254,9 @@ inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
     if (props.contains("status::buffers_to_work")) {
         if (!(props["status::buffers_to_work"] >>= s.buffers_to_work)) return false;
     }
+    if (props.contains("status::udp_socket_buffer_queue")) {
+        if (!(props["status::udp_socket_buffer_queue"] >>= s.udp_socket_buffer_queue)) return false;
+    }
     return true;
 }
 
@@ -267,6 +272,8 @@ inline void operator<<= (CORBA::Any& a, const status_struct& s) {
     props["status::empty_buffers_available"] = s.empty_buffers_available;
  
     props["status::buffers_to_work"] = s.buffers_to_work;
+ 
+    props["status::udp_socket_buffer_queue"] = s.udp_socket_buffer_queue;
     a <<= props;
 }
 
@@ -280,6 +287,8 @@ inline bool operator== (const status_struct& s1, const status_struct& s2) {
     if (s1.empty_buffers_available!=s2.empty_buffers_available)
         return false;
     if (s1.buffers_to_work!=s2.buffers_to_work)
+        return false;
+    if (s1.udp_socket_buffer_queue!=s2.udp_socket_buffer_queue)
         return false;
     return true;
 }

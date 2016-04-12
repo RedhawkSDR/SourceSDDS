@@ -14,7 +14,7 @@
 struct advanced_optimizations_struct {
     advanced_optimizations_struct ()
     {
-        buffer_size = 200000;
+        buffer_size = 20000;
         udp_socket_buffer_size = 134217728;
         pkts_per_socket_read = 500;
         sdds_pkts_per_bulkio_push = 1000;

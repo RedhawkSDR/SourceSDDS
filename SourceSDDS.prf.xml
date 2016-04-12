@@ -5,7 +5,7 @@
     <description>These advanced optimizations are only read during component start and cannot be changed while the component is started. </description>
     <simple id="advanced_optimizations::buffer_size" name="buffer_size" type="ulong">
       <description>Number of packets to put in the sdds buffer at startup. Note: The total amount of memory allocated is bufferSize * 1080b</description>
-      <value>200000</value>
+      <value>20000</value>
       <units>pkts</units>
     </simple>
     <simple id="advanced_optimizations::udp_socket_buffer_size" mode="readwrite" name="udp_socket_buffer_size" type="ulong">

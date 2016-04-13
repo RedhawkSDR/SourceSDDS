@@ -30,12 +30,12 @@ public:
 
     void run(SmartPacketBuffer<SDDSpacket> *pktbuffer);
     void shutDown();
-    void setTimeout(int timeout);
     void setPktsPerRead(size_t pkts_per_read);
     size_t getPktsPerRead();
     void setConnectionInfo(std::string interface, std::string ip, uint16_t vlan, uint16_t port) throw (BadParameterError);
     void setSocketBufferSize(int socket_buffer_size);
     size_t getSocketBufferSize();
+    bool setSocketBlockingEnabled(int fd, bool blocking);
 private:
     bool m_shuttingDown;
     bool m_running;

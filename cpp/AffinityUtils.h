@@ -129,6 +129,8 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 	char st[128];
 	char tx_rx_queue[128];
 
+	uint64_t rx_queue = 0;
+
 	/* Read the entire contents of /proc/cpuinfo into the buffer.  */
 	fp = fopen ("/proc/net/udp", "r");
 	bytes_read = fread (buffer, 1, sizeof (buffer), fp);
@@ -147,30 +149,39 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 	std::stringstream ss;
 	ss << std::uppercase << std::hex << ip_add << ":" << port;
 
+	// Find all occurrences and return the max
 	match = strstr (buffer, ss.str().c_str());
 	if (match == NULL) {
-		RH_NL_DEBUG("SourceSDDSUtils", "In parsing /proc/net/udp the IP and port not found, is socket bound?");
+		RH_NL_DEBUG("SourceSDDSUtils", "In parsing /proc/net/udp the IP and port not found, is the socket bound?");
 		return 0;
 	}
 
+	while (match) {
+		/* Parse the line to extract the tx_queue:rx_queue.  */
+		// 00000000:0801 00000000:0000 07 00000000:00000000
+		sscanf (match, "%s %s %s %s", &local_address[0], &rem_address[0], &st[0], &tx_rx_queue[0]);
 
-	/* Parse the line to extract the clock speed.  */
-	// 00000000:0801 00000000:0000 07 00000000:00000000
-	sscanf (match, "%s %s %s %s", &local_address[0], &rem_address[0], &st[0], &tx_rx_queue[0]);
+		std::string rx_queue_str(tx_rx_queue);
+		std::size_t colon_pos = rx_queue_str.find(':');
 
-	std::string rx_queue_str(tx_rx_queue);
-	std::size_t colon_pos = rx_queue_str.find(':');
-	if (colon_pos == std::string::npos) {
-		RH_NL_WARN("SourceSDDSUtils", "Failed to properly parse the UDP socket buffer information from /proc/net/udp");
-		return 0;
-	}
-	rx_queue_str = rx_queue_str.substr(colon_pos+1, rx_queue_str.size());
+		if (colon_pos == std::string::npos) {
+			RH_NL_WARN("SourceSDDSUtils", "Failed to properly parse the UDP socket buffer information from /proc/net/udp");
+			return 0;
+		}
 
-	bool success;
-	uint64_t rx_queue = ConvertString<uint64_t>(rx_queue_str, success);
+		rx_queue_str = rx_queue_str.substr(colon_pos+1, rx_queue_str.size());
 
-	if (!success) {
-		return 0;
+		bool success;
+		uint64_t tmp_rx_queue = ConvertString<uint64_t>(rx_queue_str, success);
+
+		if (success) {
+			rx_queue = std::max(rx_queue, tmp_rx_queue);
+		}
+
+
+		// Move the pointer along
+		match++;
+		match = strstr (match, ss.str().c_str());
 	}
 
 	return rx_queue;

@@ -20,19 +20,22 @@
 PREPARE_LOGGING(SocketReader)
 
 SocketReader::SocketReader(): m_shuttingDown(false), m_running(false), m_timeout(1), m_pkts_per_read(1), m_socket_buffer_size(-1) {
-	m_multicast_connection = {0};
-	m_unicast_connection = {0};
+	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection));
+	memset(&m_unicast_connection, 0, sizeof(m_unicast_connection));
 }
 
-SocketReader::~SocketReader() {}
+SocketReader::~SocketReader() {
+	shutDown();
+}
 
 void SocketReader::shutDown() {
 	LOG_DEBUG(SocketReader, "Shutting down the socket reader");
 	m_shuttingDown = true;
 	m_running = false;
 	LOG_DEBUG(SocketReader, "Closing socket");
-	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	m_multicast_connection = {0}; }
-	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			m_unicast_connection = {0}; }
+
+	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection)); }
+	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			memset(&m_unicast_connection, 0, sizeof(m_unicast_connection)); }
 }
 
 void SocketReader::setPktsPerRead(size_t pkts_per_read) {
@@ -56,8 +59,8 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 	}
 
 	// If we'd already been running on a different socket.
-	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	m_multicast_connection = {0}; }
-	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			m_unicast_connection = {0}; }
+	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection)); }
+	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			memset(&m_unicast_connection, 0, sizeof(m_unicast_connection)); }
 
 	in_addr_t lowMulti = inet_network("224.0.0.0");
 	in_addr_t highMulti = inet_network("239.255.255.250");

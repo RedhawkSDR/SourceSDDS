@@ -22,6 +22,7 @@ SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bu
 }
 
 SddsToBulkIOProcessor::~SddsToBulkIOProcessor() {
+	shutDown();
 }
 
 void SddsToBulkIOProcessor::setPktsPerRead(size_t pkts_per_read) {
@@ -46,7 +47,7 @@ size_t SddsToBulkIOProcessor::getPktsPerRead() {
 }
 
 void SddsToBulkIOProcessor::shutDown() {
-	LOG_DEBUG(SddsToBulkIOProcessor, "Shutting down the packet processsor");
+	LOG_DEBUG(SddsToBulkIOProcessor, "Shutting down the packet processor");
 	m_shuttingDown = true;
 	m_running = false;
 }
@@ -189,7 +190,8 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 				m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_wsec, m_start_of_year);
 			}
 
-			//XXX: I wasn't sure if sizeof(pkt->d) would work but it does return 1024.
+			// Did some quick testing to see if an insert or a resize + memcopy was faster, insert FTW.
+			//I wasn't sure if sizeof(pkt->d) would work but it does return 1024.
 			m_bulkIO_data.insert(m_bulkIO_data.end(), pkt->d, pkt->d + sizeof(pkt->d));
 
 			// And we are done with this packet. Take it off the pktsToWork que and add it to the pktsToRecycle que.

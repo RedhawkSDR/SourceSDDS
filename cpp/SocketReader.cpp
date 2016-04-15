@@ -51,6 +51,7 @@ size_t SocketReader::getPktsPerRead() {
 }
 
 void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint16_t vlan, uint16_t port) throw (BadParameterError) {
+	LOG_INFO(SocketReader, "Setting connection info to Interface: " << interface << " IP: " << ip << " Port: " << port);
 	if (m_running) {
 		LOG_WARN(SocketReader, "Cannot change the socket address while the socket reader thread is running");
 		return;
@@ -72,11 +73,23 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 	}
 
 	// Looks like we're doing a multicast port. Create multicast client.
-	// This throws BAD_PARAM if there are issues.
+	// This throws BAD_PARAM if there are issues....sometimes. Other times it just returns -1.
 	if ((inet_network(ip.c_str()) > lowMulti) && (inet_addr(ip.c_str()) < highMulti)) {
 		m_multicast_connection = multicast_client(interface.c_str(), ip.c_str(), port);
 	} else {
 		m_unicast_connection = unicast_client(interface.c_str(), ip.c_str(), port);
+	}
+
+	int socket = (m_multicast_connection.sock != 0) ? (m_multicast_connection.sock) : (m_unicast_connection.sock);
+
+	if (socket < 0) {
+		memset(&m_multicast_connection, 0, sizeof(m_multicast_connection));
+		memset(&m_unicast_connection, 0, sizeof(m_unicast_connection));
+
+		std::stringstream ss;
+		ss << "Could not create socket, please check the parameters provided: Interface: " << interface << " IP: " << ip << " Port: " << port;
+		LOG_ERROR(SocketReader, ss.str());
+		throw BadParameterError(ss.str());
 	}
 }
 
@@ -159,7 +172,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 			switch(errno) {
 			// Same as EAGAIN
 			case EWOULDBLOCK:
-				poll(poll_struct, 1, 1000); // 100 ms max wait poll if no data is available.
+				poll(poll_struct, 1, 100); // 100 ms max wait poll if no data is available.
 				continue;
 				break;
 			case EINTR:
@@ -169,7 +182,9 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 				m_running = false;
 				break;
 			default:
-				LOG_INFO(SocketReader, "Received unexpected errno from socket read: " << errno);
+				LOG_ERROR(SocketReader, "Received unexpected errno from socket read: " << errno);
+				m_shuttingDown = true;
+				m_running = false;
 				break;
 			}
 		}

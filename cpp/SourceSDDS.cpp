@@ -10,6 +10,7 @@
 #include "SourceSDDS.h"
 #include <signal.h>
 #include "AffinityUtils.h"
+#include <ossie/CF/cf.h>
 
 PREPARE_LOGGING(SourceSDDS_i)
 
@@ -183,7 +184,10 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	try {
 		setupSocketReaderOptions();
 	} catch (BadParameterError &e) {
-		LOG_ERROR(SourceSDDS_i, "Failed to setup socket reader options: " << e.what());
+		std::stringstream ss;
+		ss << "Failed to setup socket reader options: " << e.what();
+		LOG_ERROR(SourceSDDS_i, ss.str());
+		throw CF::Resource::StartError(CF::CF_EINVAL, ss.str().c_str());
 		return;
 	}
 
@@ -235,6 +239,7 @@ void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
 }
 
 char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const char* userid) throw (BULKIO::dataSDDS::AttachError, BULKIO::dataSDDS::StreamInputError) {
+	LOG_INFO(SourceSDDS_i, "Attach called by: " << userid);
 	if (m_attach_stream.attached) {
 		LOG_ERROR(SourceSDDS_i, "Can only handle a single attach. Detach current stream: " << m_attach_stream.id);
 		throw BULKIO::dataSDDS::AttachError("Can only handle a single attach. Detach current stream first");

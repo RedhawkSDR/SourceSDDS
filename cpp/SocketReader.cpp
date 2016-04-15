@@ -109,7 +109,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	}
 
     std::deque<SddsPacketPtr> bufQue;
-    int retval;
+    int pktsReadThisPass = 0;
     size_t i;
 
     struct mmsghdr msgs[m_pkts_per_read];
@@ -125,8 +125,13 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
     getsockopt(socket, SOL_SOCKET, SO_RCVBUF, &m_socket_buffer_size, &optlen);
 
 	memset(msgs, 0, sizeof(msgs));
+
+	// Fill our buffer with free packets
+	pktbuffer->pop_empty_buffers(bufQue, m_pkts_per_read);
+
 	for (i = 0; i < m_pkts_per_read; i++) {
 		iovecs[i].iov_len          = SDDS_PACKET_SIZE;
+		iovecs[i].iov_base         = bufQue[i].get();
 		msgs[i].msg_hdr.msg_iov    = &iovecs[i];
 		msgs[i].msg_hdr.msg_iovlen = 1;
 	}
@@ -134,47 +139,50 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	LOG_DEBUG(SocketReader, "Entering socket read while loop");
     while (not m_shuttingDown) {
 
-		// Fill our buffer with free packets
-    	pktbuffer->pop_empty_buffers(bufQue, m_pkts_per_read);
+    	if (pktsReadThisPass > 0) {
+			// Fill our buffer with free packets
+			pktbuffer->pop_empty_buffers(bufQue, m_pkts_per_read);
 
-		// Repoint the iovecs to the new buffers
-		for (i = 0; i < m_pkts_per_read; i++) {
-			iovecs[i].iov_base         = bufQue[i].get();
-		}
-
+			// Re-point the iovecs to the new buffers
+			// Note that the logic would be a lot simpler to go from i = 0 however if we did not use all
+			// of our buffers in the last iteration they are already pointed to the right spot. No need to loop through everything.
+			for (i = 0; i < (size_t) pktsReadThisPass; ++i) {
+				iovecs[i].iov_base = bufQue[i].get();
+			}
+    	}
 
 
 		// Get packets, the MSG_DONTWAIT does nothing since we already set this to non-blocking socket. Same with the timeout.
-		retval = recvmmsg(socket, msgs, m_pkts_per_read, MSG_DONTWAIT, NULL);
+		pktsReadThisPass = recvmmsg(socket, msgs, m_pkts_per_read, MSG_DONTWAIT, NULL);
 
-		if (retval == -1) {
-			if (m_shuttingDown) {
-				// Don't drop the buffers! Put them back where you found them.
-				// XXX If we ever switch to a single producer single consumer no-lock no-wait data structure this may mess things up.
-				pktbuffer->recycle_buffers(bufQue);
+		if (pktsReadThisPass == -1) {
+			switch(errno) {
+			// Same as EAGAIN
+			case EWOULDBLOCK:
+				poll(poll_struct, 1, 1000); // 100 ms max wait poll if no data is available.
+				continue;
+				break;
+			case EINTR:
+			// Someone is trying to kill us.
+				LOG_ERROR(SocketReader, "Socket read was killed by an interrupt. Will stop reading.");
+				m_shuttingDown = true;
 				m_running = false;
 				break;
-			} // TODO: Considering using a boost::interrupt point instead
-
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				poll(poll_struct, 1, 100); // 100 ms max wait poll if no data is available.
-				continue;
+			default:
+				LOG_INFO(SocketReader, "Received unexpected errno from socket read: " << errno);
+				break;
 			}
-
-			// Someone is trying to kill us.
-			if (errno == EINTR) {
-				LOG_ERROR(SocketReader, "Socket read was killed by an interrupt. Will stop reading.");
-				m_running = false;
-				pktbuffer->recycle_buffers(bufQue);
-				return;
-			}
-
-			continue;
 		}
 
 		// Push the packets onto the queue that we've received.
-		pktbuffer->push_full_buffers(bufQue, retval);
+		pktbuffer->push_full_buffers(bufQue, pktsReadThisPass);
     }
+
+    // Shutting down
+	// Don't drop the buffers! Put them back where you found them.
+	// XXX If we ever switch to a single producer single consumer no-lock no-wait data structure this may mess things up.
+	pktbuffer->recycle_buffers(bufQue);
+	m_running = false;
 }
 
 /** Returns true on success, or false if there was an error */

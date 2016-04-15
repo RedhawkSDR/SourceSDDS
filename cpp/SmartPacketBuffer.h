@@ -102,10 +102,10 @@ public:
         	m_no_empty_buffers.wait(lock, boost::bind(&SmartPacketBuffer<T>::empties_available, this, request));
         	if (m_shuttingDown) {return;}
 
-        	while (que.size() != len) {
-        		que.push_back(*m_empty_buffers.begin());
-				m_empty_buffers.pop_front();
-        	}
+        	// Really wish we could use c++11 and just use move :-p
+        	// Or more boost::move but that is 1.49
+        	que.insert(que.begin(), m_empty_buffers.begin(), m_empty_buffers.begin() + request);
+        	m_empty_buffers.erase(m_empty_buffers.begin(), m_empty_buffers.begin() + request);
 
         	lock.unlock();
         }
@@ -156,10 +156,8 @@ public:
 		m_no_full_buffers.wait(lock, boost::bind(&SmartPacketBuffer<T>::full_available, this, request));
 		if (m_shuttingDown) {return;}
 
-    	while (que.size() != len) {
-    		que.push_back(*m_full_buffers.begin());
-    		m_full_buffers.pop_front();
-    	}
+		que.insert(que.end(), m_full_buffers.begin(), m_full_buffers.begin() + request);
+		m_full_buffers.erase(m_full_buffers.begin(), m_full_buffers.begin() + request);
 
 		lock.unlock();
 	}

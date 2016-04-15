@@ -109,6 +109,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_shuttingDown = false;
 	m_running = true;
 	struct pollfd poll_struct[1];
+	errno = 0;
 
 	int socket = (m_multicast_connection.sock != 0) ? (m_multicast_connection.sock) : (m_unicast_connection.sock);
 
@@ -152,7 +153,16 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	LOG_DEBUG(SocketReader, "Entering socket read while loop");
     while (not m_shuttingDown) {
 
-    	if (pktsReadThisPass > 0) {
+		// Get packets, the MSG_DONTWAIT does nothing since we already set this to non-blocking socket. Same with the timeout.
+		pktsReadThisPass = recvmmsg(socket, msgs, m_pkts_per_read, MSG_DONTWAIT, NULL);
+
+		switch(errno) {
+		case 0: // This is the happy path, things went really well.
+
+			// I don't think doing this in a single call would help any, we still need to protect two queues.
+			// Push the packets onto the queue that we've received.
+			pktbuffer->push_full_buffers(bufQue, pktsReadThisPass);
+
 			// Fill our buffer with free packets
 			pktbuffer->pop_empty_buffers(bufQue, m_pkts_per_read);
 
@@ -162,35 +172,25 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 			for (i = 0; i < (size_t) pktsReadThisPass; ++i) {
 				iovecs[i].iov_base = bufQue[i].get();
 			}
-    	}
+			break;
 
-
-		// Get packets, the MSG_DONTWAIT does nothing since we already set this to non-blocking socket. Same with the timeout.
-		pktsReadThisPass = recvmmsg(socket, msgs, m_pkts_per_read, MSG_DONTWAIT, NULL);
-
-		if (pktsReadThisPass == -1) {
-			switch(errno) {
-			// Same as EAGAIN
-			case EWOULDBLOCK:
-				poll(poll_struct, 1, 100); // 100 ms max wait poll if no data is available.
-				continue;
-				break;
-			case EINTR:
-			// Someone is trying to kill us.
-				LOG_ERROR(SocketReader, "Socket read was killed by an interrupt. Will stop reading.");
-				m_shuttingDown = true;
-				m_running = false;
-				break;
-			default:
-				LOG_ERROR(SocketReader, "Received unexpected errno from socket read: " << errno);
-				m_shuttingDown = true;
-				m_running = false;
-				break;
-			}
+		// Same as EAGAIN
+		case EWOULDBLOCK: // No data was available. Wait for data.
+			poll(poll_struct, 1, 100); // 100 ms max wait poll if no data is available.
+			errno = 0;
+			break;
+		case EINTR:
+		// Someone is trying to kill us.
+			LOG_ERROR(SocketReader, "Socket read was killed by an interrupt. Will stop reading.");
+			m_shuttingDown = true;
+			m_running = false;
+			break;
+		default:
+			LOG_ERROR(SocketReader, "Received unexpected errno from socket read: " << errno);
+			m_shuttingDown = true;
+			m_running = false;
+			break;
 		}
-
-		// Push the packets onto the queue that we've received.
-		pktbuffer->push_full_buffers(bufQue, pktsReadThisPass);
     }
 
     // Shutting down

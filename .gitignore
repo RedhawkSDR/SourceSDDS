@@ -2,7 +2,7 @@ cpp/.deps/
 cpp/Makefile
 cpp/Makefile.in
 cpp/SourceSDDS
-cpp/*.o
+cpp/**/*.o
 cpp/aclocal.m4
 cpp/autom4te.cache/
 cpp/config.guess

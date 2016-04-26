@@ -63,6 +63,14 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 	retVal.udp_socket_buffer_queue = ss.str();
 	ss.str("");
 
+	retVal.input_address = (attachment_override.enabled) ? attachment_override.ip_address:m_attach_stream.multicastAddress;
+	retVal.input_port = (attachment_override.enabled) ? attachment_override.port:m_attach_stream.port;
+	retVal.input_vlan = (attachment_override.enabled) ? attachment_override.vlan:m_attach_stream.vlan;
+	retVal.input_stream_id = m_sddsToBulkIO.getStreamId();
+	retVal.input_samplerate = m_sddsToBulkIO.getSampleRate();
+	retVal.input_endianness = m_sddsToBulkIO.getEndianness();
+	retVal.time_slips = m_sddsToBulkIO.getTimeSlips();
+
 	return retVal;
 }
 

@@ -11,8 +11,9 @@
 
 PREPARE_LOGGING(SddsToBulkIOProcessor)
 
+//TODO: Should accum_error_tolerance be a setable property?  Should we report it back?
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
-	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false)
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_last_fsec(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0.000001), m_accum_error_tolerance(0)
 {
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
@@ -111,6 +112,12 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 		m_expected_seq_number = pkt->get_seq();
 		m_bps = (pkt->bps == 31) ? 32 : pkt->bps;
 
+		// Update our current sample rate and last times
+		m_current_sample_rate = pkt->get_rate();
+		m_max_time_step = ((double) (SDDS_DATA_SIZE + 1)) / m_current_sample_rate;
+		m_ideal_time_step = ((double) (SDDS_DATA_SIZE)) / m_current_sample_rate;
+		m_min_time_step = ((double) (SDDS_DATA_SIZE - 1)) / m_current_sample_rate;
+
 		return true;
 	}
 
@@ -127,7 +134,37 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 	return true;
 }
 
+void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
+	// If time tag is not valid no need to check for time slips.
+	bool slip = false;
+	if (not pkt->get_ttv()) {
+		return;
+	}
 
+	double deltaTime((double)(pkt->get_time_sec() - m_last_wsec) + pkt->get_time_frac() - m_last_fsec);
+	m_last_wsec = pkt->get_time_sec();
+	m_last_fsec = pkt->get_time_frac();
+
+	std::cout << "YLB: deltaTime = " << deltaTime << std::endl;
+
+	if (deltaTime > m_max_time_step || deltaTime < m_min_time_step) {
+		LOG_WARN(SddsToBulkIOProcessor, "Timing slip of " << deltaTime << " occurred on packet: " << pkt->seq);
+		slip = true;
+	}
+
+	m_time_error_accum+=deltaTime-m_ideal_time_step;
+
+	if (std::abs(m_time_error_accum) > m_accum_error_tolerance) {
+		LOG_WARN(SddsToBulkIOProcessor, "The time slip accumulator has exceeded the limit set, counting it as a time slip.")
+		m_time_error_accum = 0.0;
+		slip = true;
+	}
+
+	if(slip) {
+		m_num_time_slips++;
+	}
+
+}
 /**
  * This is the main method for processing the sdds packets. We want to push out in chunks of m_pkts_per_read so we try and keep
  * pktsToWork that size by keeping a second container of pkts to recycle. When we find a time discontinuity or are waiting for
@@ -154,7 +191,8 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			m_first_packet = true;
 			return;
 		} else {
-			// The order is valid.
+			// The order is valid. Check for time slips
+			checkForTimeSlip(pkt);
 
 			// If the current ttv flag does not match this packets, there has been a state change.
 			// This only matters if the user has requested we push on ttv.
@@ -204,7 +242,6 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			// Adjust for the CRC packet
 			if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
 				m_expected_seq_number++;
-
 
 			// We've worked through the full stack of packets, push the data and clear the buffer
 			if (pkt_it == pktsToWork.end()) {
@@ -322,4 +359,20 @@ void SddsToBulkIOProcessor::unsetUpstreamSri() {
 	m_use_upstream_sri = false;
 	m_upstream_sri_set = false;
 	m_endianness = "";
+}
+
+std::string SddsToBulkIOProcessor::getStreamId() {
+	return CORBA::string_dup(m_sri.streamID);
+}
+
+double SddsToBulkIOProcessor::getSampleRate() {
+	return m_current_sample_rate;
+}
+
+std::string SddsToBulkIOProcessor::getEndianness() {
+	return m_endianness;
+}
+
+long SddsToBulkIOProcessor::getTimeSlips() {
+	return m_num_time_slips;
 }

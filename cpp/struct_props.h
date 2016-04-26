@@ -239,6 +239,13 @@ struct status_struct {
         empty_buffers_available = "";
         buffers_to_work = "";
         udp_socket_buffer_queue = "";
+        input_address = "";
+        input_port = 0;
+        input_vlan = 0;
+        input_endianness = "";
+        input_samplerate = 0;
+        input_stream_id = "";
+        time_slips = 0LL;
     };
 
     static std::string getId() {
@@ -251,6 +258,13 @@ struct status_struct {
     std::string empty_buffers_available;
     std::string buffers_to_work;
     std::string udp_socket_buffer_queue;
+    std::string input_address;
+    CORBA::Long input_port;
+    CORBA::Long input_vlan;
+    std::string input_endianness;
+    double input_samplerate;
+    std::string input_stream_id;
+    CORBA::LongLong time_slips;
 };
 
 inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
@@ -275,6 +289,27 @@ inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
     if (props.contains("status::udp_socket_buffer_queue")) {
         if (!(props["status::udp_socket_buffer_queue"] >>= s.udp_socket_buffer_queue)) return false;
     }
+    if (props.contains("status::input_address")) {
+        if (!(props["status::input_address"] >>= s.input_address)) return false;
+    }
+    if (props.contains("status::input_port")) {
+        if (!(props["status::input_port"] >>= s.input_port)) return false;
+    }
+    if (props.contains("status::input_vlan")) {
+        if (!(props["status::input_vlan"] >>= s.input_vlan)) return false;
+    }
+    if (props.contains("status::input_endianness")) {
+        if (!(props["status::input_endianness"] >>= s.input_endianness)) return false;
+    }
+    if (props.contains("status::input_samplerate")) {
+        if (!(props["status::input_samplerate"] >>= s.input_samplerate)) return false;
+    }
+    if (props.contains("status::input_stream_id")) {
+        if (!(props["status::input_stream_id"] >>= s.input_stream_id)) return false;
+    }
+    if (props.contains("status::time_slips")) {
+        if (!(props["status::time_slips"] >>= s.time_slips)) return false;
+    }
     return true;
 }
 
@@ -292,6 +327,20 @@ inline void operator<<= (CORBA::Any& a, const status_struct& s) {
     props["status::buffers_to_work"] = s.buffers_to_work;
  
     props["status::udp_socket_buffer_queue"] = s.udp_socket_buffer_queue;
+ 
+    props["status::input_address"] = s.input_address;
+ 
+    props["status::input_port"] = s.input_port;
+ 
+    props["status::input_vlan"] = s.input_vlan;
+ 
+    props["status::input_endianness"] = s.input_endianness;
+ 
+    props["status::input_samplerate"] = s.input_samplerate;
+ 
+    props["status::input_stream_id"] = s.input_stream_id;
+ 
+    props["status::time_slips"] = s.time_slips;
     a <<= props;
 }
 
@@ -307,6 +356,20 @@ inline bool operator== (const status_struct& s1, const status_struct& s2) {
     if (s1.buffers_to_work!=s2.buffers_to_work)
         return false;
     if (s1.udp_socket_buffer_queue!=s2.udp_socket_buffer_queue)
+        return false;
+    if (s1.input_address!=s2.input_address)
+        return false;
+    if (s1.input_port!=s2.input_port)
+        return false;
+    if (s1.input_vlan!=s2.input_vlan)
+        return false;
+    if (s1.input_endianness!=s2.input_endianness)
+        return false;
+    if (s1.input_samplerate!=s2.input_samplerate)
+        return false;
+    if (s1.input_stream_id!=s2.input_stream_id)
+        return false;
+    if (s1.time_slips!=s2.time_slips)
         return false;
     return true;
 }

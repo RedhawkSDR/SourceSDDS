@@ -42,6 +42,10 @@ public:
 	unsigned short getBps();
 	unsigned long long getNumDropped();
 	uint16_t getExpectedSequenceNumber();
+	std::string getStreamId();
+	double getSampleRate();
+	std::string getEndianness();
+	long getTimeSlips();
 private:
 	size_t m_pkts_per_read;
 	bool m_running;
@@ -52,7 +56,8 @@ private:
 	bool m_current_ttv_flag;
 	uint16_t m_expected_seq_number;
 	std::vector<uint8_t> m_bulkIO_data;
-	long long m_last_wsec;
+	uint64_t m_last_wsec;
+	double m_last_fsec;
 	unsigned long long m_pkts_dropped;
 	time_t m_start_of_year;
 	unsigned short m_bps;
@@ -66,11 +71,15 @@ private:
 	std::string m_endianness;
 	bool m_new_upstream_sri;
 	bool m_use_upstream_sri;
+	long m_num_time_slips;
+	double m_current_sample_rate;
+	double m_max_time_step, m_min_time_step, m_ideal_time_step, m_time_error_accum, m_accum_error_tolerance;
 
 	void processPackets(std::deque<SddsPacketPtr> &pktsToWork, std::deque<SddsPacketPtr> &pktsToRecycle);
 	bool orderIsValid(SddsPacketPtr &pkt);
 	void pushPacket();
 	void pushSri();
+	void checkForTimeSlip(SddsPacketPtr &pkt);
 };
 
 #endif /* SDDSTOBULKIOPROCESSOR_H_ */

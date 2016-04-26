@@ -291,6 +291,17 @@ class SDDSpacket {
     cout << endl;
   }
 
+#define PS250_PER_SEC ((uint64_t) 4000000000)
+#define PS250_IN_SEC ((double)250e-12)
+
+  uint64_t get_time_sec() {
+	  return get_ttag() / PS250_PER_SEC;
+  }
+
+  double get_time_frac() {
+	  return PS250_IN_SEC * (get_ttag() - PS250_PER_SEC*get_time_sec());
+  }
+
 };
 
 #endif

@@ -96,6 +96,27 @@
     <simple id="status::udp_socket_buffer_queue" name="udp_socket_buffer_queue" type="string">
       <value></value>
     </simple>
+    <simple id="status::input_address" name="input_address" type="string">
+      <value></value>
+    </simple>
+    <simple id="status::input_port" name="input_port" type="long">
+      <value>0</value>
+    </simple>
+    <simple id="status::input_vlan" name="input_vlan" type="long">
+      <value>0</value>
+    </simple>
+    <simple id="status::input_endianness" name="input_endianness" type="string">
+      <value></value>
+    </simple>
+    <simple id="status::input_samplerate" name="input_samplerate" type="double">
+      <value>0</value>
+    </simple>
+    <simple id="status::input_stream_id" name="input_stream_id" type="string">
+      <value></value>
+    </simple>
+    <simple id="status::time_slips" name="time_slips" type="longlong">
+      <value>0</value>
+    </simple>
     <configurationkind kindtype="property"/>
   </struct>
 </properties>

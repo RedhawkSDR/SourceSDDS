@@ -13,13 +13,17 @@ PREPARE_LOGGING(SddsToBulkIOProcessor)
 
 //TODO: Should accum_error_tolerance be a setable property?  Should we report it back?
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
-	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_wsec(0), m_last_fsec(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0.000001), m_accum_error_tolerance(0)
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_sdds_time(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0), m_accum_error_tolerance(0.000001)
 {
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
 
 	// Needs to be initialized.
 	m_sri.streamID = "DEFAULT_SDDS_STREAM_ID";
+
+	std::stringstream ss;
+	ss << __BYTE_ORDER;
+	m_endianness = ss.str();
 }
 
 SddsToBulkIOProcessor::~SddsToBulkIOProcessor() {
@@ -83,7 +87,6 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	while (not m_shuttingDown) {
 		// We HAVE to recycle this buffer.
 		pktbuffer->pop_full_buffers(pktsToProcess, m_pkts_per_read);
-
 		if (not m_shuttingDown) {
 			processPackets(pktsToProcess, pktsToRecycle);
 		}
@@ -96,6 +99,7 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	pktbuffer->recycle_buffers(pktsToRecycle);
 
 	m_running = false;
+	m_first_packet = true;
 }
 
 /**
@@ -112,11 +116,19 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 		m_expected_seq_number = pkt->get_seq();
 		m_bps = (pkt->bps == 31) ? 32 : pkt->bps;
 
+		// TODO: The get_rate returns the wrong value for the MSDD, how should we deal with this?
 		// Update our current sample rate and last times
 		m_current_sample_rate = pkt->get_rate();
-		m_max_time_step = ((double) (SDDS_DATA_SIZE + 1)) / m_current_sample_rate;
-		m_ideal_time_step = ((double) (SDDS_DATA_SIZE)) / m_current_sample_rate;
-		m_min_time_step = ((double) (SDDS_DATA_SIZE - 1)) / m_current_sample_rate;
+		int samps_per_packet = SDDS_DATA_SIZE / (m_bps / 8);
+
+		// If complex then the samples per packet is half
+		if (pkt->cx) {
+			samps_per_packet = samps_per_packet / 2;
+		}
+
+		m_max_time_step = ((double) (samps_per_packet + 1)) / m_current_sample_rate;
+		m_ideal_time_step = ((double) (samps_per_packet)) / m_current_sample_rate;
+		m_min_time_step = ((double) (samps_per_packet - 1)) / m_current_sample_rate;
 
 		return true;
 	}
@@ -137,25 +149,31 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 	// If time tag is not valid no need to check for time slips.
 	bool slip = false;
+
 	if (not pkt->get_ttv()) {
 		return;
 	}
 
-	double deltaTime((double)(pkt->get_time_sec() - m_last_wsec) + pkt->get_time_frac() - m_last_fsec);
-	m_last_wsec = pkt->get_time_sec();
-	m_last_fsec = pkt->get_time_frac();
+	// This magically works. :-) (operator overloading)
+	if (m_last_sdds_time == 0) {
+		m_last_sdds_time = pkt->get_SDDSTime();
+		return;
+	}
 
-	std::cout << "YLB: deltaTime = " << deltaTime << std::endl;
+	SDDSTime curr_time = pkt->get_SDDSTime();
+	double deltaTime = curr_time.seconds() - m_last_sdds_time.seconds();
+
+	m_last_sdds_time = curr_time;
 
 	if (deltaTime > m_max_time_step || deltaTime < m_min_time_step) {
-		LOG_WARN(SddsToBulkIOProcessor, "Timing slip of " << deltaTime << " occurred on packet: " << pkt->seq);
+		LOG_WARN(SddsToBulkIOProcessor, "Delta time of " << deltaTime << " occurred on packet: " << pkt->seq << " delta between packets expected to be between " << m_min_time_step  << " and " << m_max_time_step);
 		slip = true;
 	}
 
-	m_time_error_accum+=deltaTime-m_ideal_time_step;
+	m_time_error_accum += deltaTime - m_ideal_time_step;
 
 	if (std::abs(m_time_error_accum) > m_accum_error_tolerance) {
-		LOG_WARN(SddsToBulkIOProcessor, "The time slip accumulator has exceeded the limit set, counting it as a time slip.")
+		LOG_WARN(SddsToBulkIOProcessor, "The time slip accumulator has exceeded the limit set, counting it as a time slip.");
 		m_time_error_accum = 0.0;
 		slip = true;
 	}
@@ -163,7 +181,6 @@ void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 	if(slip) {
 		m_num_time_slips++;
 	}
-
 }
 /**
  * This is the main method for processing the sdds packets. We want to push out in chunks of m_pkts_per_read so we try and keep
@@ -178,8 +195,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 		// The user may have requested we not push when the timecode is invalid. If this is the case we just need to recycle
 		// the buffers that don't have good ttv's and continue with the next packet hoping the ttv is true.
 
-		//XXX If they want to wait for ttv, this may result in a single push packet occurring at a non-max size, since the ttv changes so infrequently this is probably okay.
-		if (m_wait_for_ttv && !pkt->get_ttv()) {
+		if (m_wait_for_ttv && (pkt->get_ttv() == 0)) {
 			pktsToRecycle.push_back(pkt);
 			pkt_it = pktsToWork.erase(pkt_it);
 			continue;
@@ -191,18 +207,15 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			m_first_packet = true;
 			return;
 		} else {
-			// The order is valid. Check for time slips
-			checkForTimeSlip(pkt);
 
 			// If the current ttv flag does not match this packets, there has been a state change.
 			// This only matters if the user has requested we push on ttv.
 			// If this is the case we need to push and restart with the new ttv state.
-			if (m_current_ttv_flag != pkt->get_ttv() && m_push_on_ttv) {
-				m_current_ttv_flag = pkt->get_ttv();
+			if (m_push_on_ttv && m_current_ttv_flag != (pkt->get_ttv() != 0) ) {
+				m_current_ttv_flag = (pkt->get_ttv() != 0);
 				pushPacket();
 				return;
 			}
-
 
 			// At this point we should have a good packet and have dealt with any specific user requests regarding the ttv field.
 
@@ -225,8 +238,11 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 			// Create the bulkIO time stamp if this is the first packet to send.
 			if (m_bulkIO_data.size() == 0) {
-				m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_wsec, m_start_of_year);
+				m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_sdds_time, m_start_of_year);
 			}
+
+			// Check for time slips
+			checkForTimeSlip(pkt);
 
 			// Did some quick testing to see if an insert or a resize + memcopy was faster, insert FTW.
 			//I wasn't sure if sizeof(pkt->d) would work but it does return 1024.
@@ -345,6 +361,7 @@ uint16_t SddsToBulkIOProcessor::getExpectedSequenceNumber() {
 }
 
 void SddsToBulkIOProcessor::setUpstreamSri(BULKIO::StreamSRI upstream_sri) {
+	// TODO: Protect the SRI or only allow when stopped.
 	m_upstream_sri_set = true;
 	m_new_upstream_sri = true;
 	m_upstream_sri = upstream_sri;
@@ -358,7 +375,9 @@ void SddsToBulkIOProcessor::unsetUpstreamSri() {
 	}
 	m_use_upstream_sri = false;
 	m_upstream_sri_set = false;
-	m_endianness = "";
+	std::stringstream ss;
+	ss << __BYTE_ORDER;
+	m_endianness = ss.str();
 }
 
 std::string SddsToBulkIOProcessor::getStreamId() {

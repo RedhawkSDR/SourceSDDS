@@ -242,7 +242,7 @@ struct status_struct {
         input_address = "";
         input_port = 0;
         input_vlan = 0;
-        input_endianness = "";
+        input_endianness = "1234";
         input_samplerate = 0;
         input_stream_id = "";
         time_slips = 0LL;

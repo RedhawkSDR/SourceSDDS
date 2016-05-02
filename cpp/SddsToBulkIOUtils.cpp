@@ -1,4 +1,5 @@
 #include "SddsToBulkIOUtils.h"
+#include "ossie/debug.h"
 
 namespace ENDIANNESS {
 	const std::string BIG_ENDIAN_STR = "4321";
@@ -40,7 +41,7 @@ time_t getStartOfYear() {
  * startOfYear is the value calculated from the getStartOfYear function and is updated if the year has rolled over.
  * lastWSec is the last whole number of seconds from the SDDS Packet and is updated each time. It is used to determine if the year has rolled over.
  */
-BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, uint64_t lastWSec, time_t &startOfYear) {
+BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime &last_sdds_time, time_t &startOfYear) {
 	BULKIO::PrecisionUTCTime T;
 
 	// TODO: Originally the SourceNIC component always set this to TCS_VALID, why? Which is correct?
@@ -53,6 +54,7 @@ BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, uint64_t lastW
 	T.tcmode = BULKIO::TCM_SDDS; //Timecode mode is SDDS
 	T.toff = 0; //The sample offset from the first sample time code is 0
 
+	// TODO: Why not just use the provided t.seconds()?
 	SDDSTime t = sdds_pkt->get_SDDSTime();
 	unsigned long long frac_int = t.ps250() % 4000000000UL;
 	unsigned long long secs_int = t.ps250() - frac_int;
@@ -62,7 +64,8 @@ BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, uint64_t lastW
 	frac_flt += ext_flt;
 
 	/* this means the current year changed */
-	if (secs_flt < (double) lastWSec) {
+	if (t < last_sdds_time) {
+		RH_NL_INFO("SddsToBulkIOUtils", "Looks as though the year rolled over while processing SDDS time stamps. Happy New Year!");
 		startOfYear = getStartOfYear();
 	}
 
@@ -106,6 +109,8 @@ unsigned short getBps(SDDSpacket* sdds_pkt) {
 void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed) {
 
 	CORBA::Double recXdelta = (CORBA::Double)(1.0 / sdds_pkt->get_rate());
+	// TODO: Remove this
+	recXdelta /= 2;
 	if (recXdelta != sri.xdelta) {
 		changed = true;
 		sri.xdelta = recXdelta;

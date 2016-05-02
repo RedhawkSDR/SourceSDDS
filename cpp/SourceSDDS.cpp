@@ -59,7 +59,7 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 	// Not 100% sure why but the queue can actually get about 280 bytes larger than the set max. I guess linux gives 110% har har har (not actually 110%)
 	uint64_t rx_queue = get_rx_queue(attachment_override.ip_address, attachment_override.port);
 	percent = 100*(float) rx_queue / (float) m_socketReader.getSocketBufferSize();
-	ss << std::fixed << rx_queue << " (" << percent << "%)";
+	ss << std::fixed << rx_queue << " / " << m_socketReader.getSocketBufferSize() << " (" << percent << "%)";
 	retVal.udp_socket_buffer_queue = ss.str();
 	ss.str("");
 
@@ -121,12 +121,14 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
 	}
 
 	if (not started()) {
+		advanced_optimizations.pkts_per_socket_read = request.pkts_per_socket_read;
 		m_socketReader.setPktsPerRead(request.pkts_per_socket_read);
 	} else if(m_socketReader.getPktsPerRead() != request.pkts_per_socket_read) {
-		LOG_WARN(SourceSDDS_i, "Cannot set the buffer size while the component is running");
+		LOG_WARN(SourceSDDS_i, "Cannot set packets per socket read size while the component is running");
 	}
 
 	if (not started()) {
+		advanced_optimizations.sdds_pkts_per_bulkio_push = request.sdds_pkts_per_bulkio_push;
 		m_sddsToBulkIO.setPktsPerRead(request.sdds_pkts_per_bulkio_push);
 	} else if (m_sddsToBulkIO.getPktsPerRead() != request.sdds_pkts_per_bulkio_push) {
 		LOG_WARN(SourceSDDS_i, "Cannot set the packets per bulkIO push while the component is running");
@@ -242,7 +244,6 @@ void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
 	} else {
 		m_socketReader.setConnectionInfo(interface, m_attach_stream.multicastAddress, m_attach_stream.vlan, m_attach_stream.port);
 	}
-
 	m_socketReader.setPktsPerRead(advanced_optimizations.pkts_per_socket_read);
 }
 

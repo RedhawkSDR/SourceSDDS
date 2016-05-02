@@ -56,8 +56,7 @@ private:
 	bool m_current_ttv_flag;
 	uint16_t m_expected_seq_number;
 	std::vector<uint8_t> m_bulkIO_data;
-	uint64_t m_last_wsec;
-	double m_last_fsec;
+	SDDSTime m_last_sdds_time;
 	unsigned long long m_pkts_dropped;
 	time_t m_start_of_year;
 	unsigned short m_bps;

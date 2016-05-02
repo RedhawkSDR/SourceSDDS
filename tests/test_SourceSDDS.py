@@ -14,6 +14,7 @@ import unicast
 import Sdds
 import bulkio_helpers_sdds as bh
 from ossie.utils import sb
+from bulkio import timestamp
 
 class SDDSSink(BULKIO__POA.dataSDDS):
     def attach(self, stream, userid):
@@ -52,7 +53,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         print '###################################################################'
         print 'RUNNING TEST:',self.id()
         print '###################################################################'
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         #######################################################################
         # Verify the basic state of the component
         execparams = self.getPropertySet(kinds=("execparam",), modes=("readwrite", "writeonly"), includeNil=False)
@@ -104,7 +105,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         print 'RUNNING TEST:',self.id()
         print '###################################################################'
            
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         
         compDataSddsIn = self.comp.getPort('sdds_in')
  
@@ -134,7 +135,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Set properties
         self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
         
         sink = sb.DataSink()
@@ -203,7 +204,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Set properties
         self.comp.interface = 'lo'
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         
         sink = sb.DataSink()
 
@@ -265,7 +266,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Set properties
         self.comp.interface = 'lo'
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         
         sink = sb.DataSink()
  
@@ -326,7 +327,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Set properties
         self.comp.interface = 'lo'
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         
         sink = sb.DataSink()
 
@@ -386,7 +387,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Set properties
         self.comp.interface = 'lo'
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         
         sink = sb.DataSink()
 
@@ -441,7 +442,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Set properties
         self.comp.interface = 'lo'
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
 
         sink = sb.DataSink()
 
@@ -487,7 +488,408 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(2*fakeData, list(struct.unpack('>1024H', struct.pack('1024h', *data[:]))))
         self.assertEqual(self.comp.status.dropped_packets, 65535)
         sink.stop()
+
+
+# Tests needed for 
+    def testBufferSizeAdjustment(self):
         
+        self.comp.interface = 'lo'
+        self.comp.attachment_override.enabled = True
+
+        buf_and_read = ((3300, 100), (2200, 1000), (500, 100), (800, 500))
+
+        for x in buf_and_read:
+            self.comp.advanced_optimizations.buffer_size = x[0]
+            self.comp.advanced_optimizations.pkts_per_socket_read = x[1]
+            time.sleep(0.3)
+            self.comp.start()
+            self.assertTrue(str(x[0] - x[1]) in self.comp.status.empty_buffers_available, "Expected " + str(x[0] - x[1]) + " empty buffers available but received " + self.comp.status.empty_buffers_available)
+            self.comp.stop()
+
+    def testUdpBufferSize(self):
+        self.comp.interface = 'lo'
+        self.comp.attachment_override.enabled = True
+        buffer_sizes = (1000, 2000, 3000, 4000, 5000, 6000)
+        prev_buffer = 0
+
+        # We cannot know exactly what the kernel will pick after our request, this test will try and increase
+        # the buffer size and simply confirm that each run creates a larger buffer size than the one before
+        # however depending on system settings this test may fail.
+        for udp_buffer_size in buffer_sizes:
+            self.comp.advanced_optimizations.udp_socket_buffer_size = udp_buffer_size
+            self.comp.start()
+            buf_size = [int(s) for s in self.comp.status.udp_socket_buffer_queue.split() if s.isdigit()][1]
+            self.assertTrue(buf_size > prev_buffer, "Failure could be false positive, see note in UDP Buffer Size test.")
+            prev_buffer = buf_size
+            self.comp.stop()
+        
+    def testSddsPacketsPerBulkIOPush(self):
+        # Get ports
+        compDataSddsIn = self.comp.getPort('sdds_in')
+        compDataShortOut_out = self.comp.getPort('short_out')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        sdds_pkts_per_push = (1, 2, 4, 8, 16, 32, 64)
+        self.comp.advanced_optimizations.buffer_size = 200000
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+        
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test') 
+        except:
+            attachId = ''
+
+        for pkts_per_push in sdds_pkts_per_push:
+            self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = pkts_per_push
+            # Start components
+            self.comp.start()
+            sink.start()
+            data = sink.getData()
+            num_sends = 0
+            
+            while (len(data) == 0 and num_sends < 2*max(sdds_pkts_per_push)):
+                # Create data
+                fakeData = [x for x in range(0, 512)]
+                h = Sdds.SddsHeader(num_sends)
+                p = Sdds.SddsShortPacket(h.header, fakeData)
+                p.encode()
+                self.userver.send(p.encodedPacket)
+                num_sends = num_sends + 1
+                if num_sends != 0 and num_sends % 32 == 31:
+                    num_sends = num_sends + 1
+                    
+                time.sleep(0.05)
+                # Get data
+                data = sink.getData()
+            
+            # Validate correct amount of data was received
+            self.assertEqual(len(data), pkts_per_push * 512)
+            self.comp.stop()
+            sink.stop()
+         
+         
+    def testPushOnTTV(self):
+        '''
+        Push on TTV will send the packet out if the TTV flag changes
+        '''
+        # Get ports
+        compDataSddsIn = self.comp.getPort('sdds_in')
+        compDataShortOut_out = self.comp.getPort('short_out')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 10
+        self.comp.advanced_configuration.push_on_ttv = True
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+        
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test') 
+        except:
+            attachId = ''
+
+        # Start components
+        self.comp.start()
+        sink.start()
+        ttv = 0
+        pktNum = 0
+        num_changes = 0
+        
+        # We'll do a ttv change every 7th packet
+        while pktNum < 100:
+            
+            if pktNum % 7 == 0:
+                ttv = (ttv + 1) % 2 # aka if 0 become 1, if 1 become 0
+                num_changes += 1
+            
+            # Create data
+            fakeData = [x for x in range(0, 512)]
+            h = Sdds.SddsHeader(pktNum, TTV = ttv)
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time.sleep(0.05)
+        
+        data = sink.getData(tstamps=True)
+        self.assertEqual(num_changes - 1, len(data[1]), "The number of bulkIO pushes (" + str(len(data[1])) + ") does not match the expected (" + str(num_changes-1) + ").")
+            
+        self.comp.stop()
+        sink.stop()
+
+    def testWaitOnTTV(self):
+        '''
+        Wait on TTV will send nothing unless the pkt contains a TTV flag
+        '''
+        # Get ports
+        compDataSddsIn = self.comp.getPort('sdds_in')
+        compDataShortOut_out = self.comp.getPort('short_out')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 10
+        self.comp.advanced_configuration.wait_on_ttv = True
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+        
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test') 
+        except:
+            attachId = ''
+
+        # Start components
+        self.comp.start()
+        sink.start()
+        ttv = 0
+        pktNum = 0
+        num_changes = 0
+        
+        # We'll do a ttv change every 7th packet
+        while pktNum < 100:
+            
+            if pktNum % 7 == 0:
+                ttv = (ttv + 1) % 2 # aka if 0 become 1, if 1 become 0
+                num_changes += 1
+            
+            # Create data
+            fakeData = [x for x in range(0, 512)]
+            h = Sdds.SddsHeader(pktNum, TTV = ttv)
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time.sleep(0.05)
+        
+        data = sink.getData(tstamps=True)
+        self.assertEqual(num_changes/2, len(data[1]), "The number of bulkIO pushes (" + str(len(data[1])) + ") does not match the expected (" + str(num_changes/2) + ").")
+            
+        self.comp.stop()
+        sink.stop()        
+    
+    def testShortBigEndianess(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+
+        kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(52651, 'long'))]
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='defStream', blocking=False, keywords=kw)
+        compDataSddsIn.pushSRI(sri,timestamp.now())  
+           
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+            
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        
+        h = Sdds.SddsHeader(0)
+        p = Sdds.SddsShortPacket(h.header, fakeData)
+        p.encode() # Defaults to big endian encoding
+        self.userver.send(p.encodedPacket)
+        time.sleep(0.05)
+        data = sink.getData()
+        
+        self.assertEqual(self.comp.status.input_endianness, "4321", "Status property for endianness is not 4321")
+        self.assertEqual(data, fakeData, "Big Endian short did not match expected")
+
+    def testShortLittleEndianess(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+
+        kw = []
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='defStream', blocking=False, keywords=kw)
+        compDataSddsIn.pushSRI(sri,timestamp.now())  
+        
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+            
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        # Byte Swap it here to make it little endian on send since encode does big endian (swap)
+        fakeData_bs = list(struct.unpack('>512H', struct.pack('@512H', *fakeData)))
+        
+        # Convert fakeData to BIG ENDIAN
+        h = Sdds.SddsHeader(0)
+        p = Sdds.SddsShortPacket(h.header, fakeData_bs)
+        p.encode() # Defaults to big endian encoding
+        self.userver.send(p.encodedPacket)
+        time.sleep(0.05)
+        data = sink.getData()
+        
+        self.assertEqual(self.comp.status.input_endianness, "1234", "Status property for endianness is not 1234")
+        self.assertEqual(data, fakeData, "Little Endian short did not match expected")
+        
+    
+    def testTimeSlips(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+            
+        # Start components
+        self.comp.start()
+
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        pktNum = 0
+        
+        sr=1e6
+        xdelta_ps=int(1/sr * 1e9)
+        time_ps=0
+        
+        # No time slips here
+        while pktNum < 100:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ps*4))
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ps = time_ps + 512*xdelta_ps
+            
+        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
+        
+        # Introduce accumulator time slip
+        while pktNum < 200:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ps*4))
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ps = time_ps + 512*xdelta_ps + 15 # The additional 15 ps is enough for ana cumulator time slip
+            
+        self.assertEqual(self.comp.status.time_slips, 1, "There should be one time slip from the accumulator")
+        
+        # Introduce one jump time slip
+        while pktNum < 300:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ps*4))
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum == 245:
+                time_ps += 5000
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ps = time_ps + 512*xdelta_ps
+            
+        self.assertEqual(self.comp.status.time_slips, 2, "There should be one time slip from the jump time slip!")
+            
+# TODO: New Year
+# TODO: Timing between SDDS and BulkIO
+# TODO: Merge upstream SRI
+# TODO: Socket Reader Thread affinity
+# TODO: BULKIO Thread affinity
+# TODO: Socket Reader priority
+# TODO: BULKIO priority
+# TODO: Speed test!
+# TODO: Upstream SRI
+
         
     # Test #16
     # XXX: YLB Take a look at this again, it isnt actually checking any thing.
@@ -503,7 +905,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Set properties
         self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.bufferSize = 200000
+        self.comp.advanced_optimizations.buffer_size = 200000
         
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         attachId = ''
@@ -547,7 +949,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.configure(configureProps)
 
 		#Configure multicast properties
-        self.comp.bufferSize = 200000  # cannot alter this except in base class loadProperties (requires recompile)
+        self.comp.buffer_size = 200000  # cannot alter this except in base class loadProperties (requires recompile)
         self.comp.advanced_configuration.pushOnTTValid = False
         self.port = 29495
         self.uni_ip = '127.0.0.1'

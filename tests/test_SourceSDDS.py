@@ -826,13 +826,13 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         pktNum = 0
         
         sr=1e6
-        xdelta_ps=int(1/sr * 1e9)
-        time_ps=0
+        xdelta_ms=int(1/sr * 1e9)
+        time_ms=0
         
         # No time slips here
         while pktNum < 100:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ps*4))
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
@@ -841,14 +841,14 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ps = time_ps + 512*xdelta_ps
+            time_ms = time_ms + 512*xdelta_ms
             
         self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
         
         # Introduce accumulator time slip
         while pktNum < 200:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ps*4))
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
@@ -857,30 +857,82 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ps = time_ps + 512*xdelta_ps + 15 # The additional 15 ps is enough for ana cumulator time slip
+            time_ms = time_ms + 512*xdelta_ms + 15 # The additional 15 ps is enough for ana cumulator time slip
             
         self.assertEqual(self.comp.status.time_slips, 1, "There should be one time slip from the accumulator")
         
         # Introduce one jump time slip
         while pktNum < 300:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ps*4))
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
             pktNum = pktNum + 1
             
             if pktNum == 245:
-                time_ps += 5000
+                time_ms += 5000
             
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ps = time_ps + 512*xdelta_ps
+            time_ms = time_ms + 512*xdelta_ms
             
         self.assertEqual(self.comp.status.time_slips, 2, "There should be one time slip from the jump time slip!")
+    
+    def testNewYear(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
             
-# TODO: New Year
+        # Start components
+        self.comp.start()
+
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        pktNum = 0
+        
+        sr=1e6
+        xdelta_ms=int(1/sr * 1e9)
+        ms_in_year = 1e9*31536000
+        time_ms=ms_in_year - xdelta_ms*512*20
+        
+        # No time slips here
+        while pktNum < 100:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ms = time_ms + 512*xdelta_ms
+            if time_ms > ms_in_year:
+                time_ms = time_ms - ms_in_year
+            
+        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
+    
+    
 # TODO: Timing between SDDS and BulkIO
 # TODO: Merge upstream SRI
 # TODO: Socket Reader Thread affinity

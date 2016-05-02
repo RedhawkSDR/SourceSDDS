@@ -165,6 +165,12 @@ void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 
 	m_last_sdds_time = curr_time;
 
+	if (deltaTime < 0) {
+		LOG_INFO(SddsToBulkIOProcessor, "Received a negative delta between packet time stamps, time is either going backwards or the year has rolled over");
+		m_last_sdds_time = curr_time;
+		return;
+	}
+
 	if (deltaTime > m_max_time_step || deltaTime < m_min_time_step) {
 		LOG_WARN(SddsToBulkIOProcessor, "Delta time of " << deltaTime << " occurred on packet: " << pkt->seq << " delta between packets expected to be between " << m_min_time_step  << " and " << m_max_time_step);
 		slip = true;

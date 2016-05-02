@@ -16,7 +16,6 @@ T ConvertString(const std::string &data, bool &success)
   {
     for (size_t i=0; i < data.length(); ++i) {
       if (!isxdigit(data[i])) {
-        std::cout << "1" << std::endl;
         success = false;
         return T();
       }
@@ -34,7 +33,6 @@ T ConvertString(const std::string &data, bool &success)
     return ret;
   } else {
     success = false;
-        std::cout << "2" << std::endl;
   }
   return T();
 }

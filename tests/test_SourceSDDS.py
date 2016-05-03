@@ -15,7 +15,23 @@ import Sdds
 import bulkio_helpers_sdds as bh
 from ossie.utils import sb
 from bulkio import timestamp
+import datetime
+from ossie.utils.bulkio.bulkio_helpers import compareSRI
+from ossie.utils.bulkio import bulkio_data_helpers
 
+
+class UTC(datetime.tzinfo):
+    """UTC"""
+
+    def utcoffset(self, dt):
+        return datetime.timedelta(0)
+
+    def tzname(self, dt):
+        return "UTC"
+
+    def dst(self, dt):
+        return datetime.timedelta(0)
+    
 class SDDSSink(BULKIO__POA.dataSDDS):
     def attach(self, stream, userid):
         self.port_lock.acquire()
@@ -43,6 +59,11 @@ class SDDSSink(BULKIO__POA.dataSDDS):
                 print(msg)
         finally:
             self.port_lock.release()
+
+def timedelta_total_seconds(timedelta):
+    return (
+        timedelta.microseconds + 0.0 +
+        (timedelta.seconds + timedelta.days * 24 * 3600) * 10 ** 6) / 10 ** 6
 
 class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
     """Test for all component implementations in SelectionService"""
@@ -720,7 +741,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.connect(sink, providesPortName='shortIn')
 
         kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(52651, 'long'))]
-        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='defStream', blocking=False, keywords=kw)
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
         compDataSddsIn.pushSRI(sri,timestamp.now())  
            
         # Try to attach
@@ -766,7 +787,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.connect(sink, providesPortName='shortIn')
 
         kw = []
-        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='defStream', blocking=False, keywords=kw)
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
         compDataSddsIn.pushSRI(sri,timestamp.now())  
         
         # Try to attach
@@ -824,13 +845,13 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         pktNum = 0
         
         sr=1e6
-        xdelta_ms=int(1/sr * 1e9)
-        time_ms=0
+        xdelta_ns=int(1/sr * 1e9)
+        time_ns=0
         
         # No time slips here
         while pktNum < 100:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4))
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
@@ -839,14 +860,14 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ms = time_ms + 512*xdelta_ms
+            time_ns = time_ns + 512*xdelta_ns
             
         self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
         
         # Introduce accumulator time slip
         while pktNum < 200:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4))
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
@@ -855,26 +876,26 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ms = time_ms + 512*xdelta_ms + 15 # The additional 15 ps is enough for ana cumulator time slip
+            time_ns = time_ns + 512*xdelta_ns + 15 # The additional 15 ps is enough for ana cumulator time slip
             
         self.assertEqual(self.comp.status.time_slips, 1, "There should be one time slip from the accumulator")
         
         # Introduce one jump time slip
         while pktNum < 300:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4))
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
             pktNum = pktNum + 1
             
             if pktNum == 245:
-                time_ms += 5000
+                time_ns += 5000
             
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ms = time_ms + 512*xdelta_ms
+            time_ns = time_ns + 512*xdelta_ns
             
         self.assertEqual(self.comp.status.time_slips, 2, "There should be one time slip from the jump time slip!")
     
@@ -906,14 +927,14 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         pktNum = 0
         
         sr=1e6
-        xdelta_ms=int(1/sr * 1e9)
-        ms_in_year = 1e9*31536000
-        time_ms=ms_in_year - xdelta_ms*512*20
+        xdelta_ns=int(1/sr * 1e9)
+        ns_in_year = 1e9*31536000
+        time_ns=ns_in_year - xdelta_ns*512*20
         
         # No time slips here
         while pktNum < 100:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4))
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4))
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
@@ -922,9 +943,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ms = time_ms + 512*xdelta_ms
-            if time_ms > ms_in_year:
-                time_ms = time_ms - ms_in_year
+            time_ns = time_ns + 512*xdelta_ns
+            if time_ns > ns_in_year:
+                time_ns = time_ns - ns_in_year
             
         self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
 
@@ -940,7 +961,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
         sink = sb.DataSink()
-
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+        
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         attachId = ''
 
@@ -952,19 +975,22 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             
         # Start components
         self.comp.start()
-
+        sink.start()
+        
+        
         # Create data
         fakeData = [x for x in range(0, 512)]
         pktNum = 0
         
         sr=1e6
-        xdelta_ms=int(1/(sr*2) * 1e9)
-        time_ms=0
+        xdelta_ns=int(1/(sr*2) * 1e9)
+        time_ns=0
         
+        recSRI = False
         # No time slips here
         while pktNum < 100:
             # Create data
-            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4), CX=1)
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4), CX=1)
             p = Sdds.SddsShortPacket(h.header, fakeData)
             p.encode()
             self.userver.send(p.encodedPacket)
@@ -973,18 +999,193 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if pktNum != 0 and pktNum % 32 == 31:
                 pktNum = pktNum + 1
                 
-            time_ms = time_ms + 512*xdelta_ms
+            time_ns = time_ns + 512*xdelta_ns
+#             if (not recSRI and sink.sri() and sink.sri().streamID != 'defStream'):
+#                 print(str(sink.sri()))
+#                 recSRI = True
             
-        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")    
-# TODO: Special MSDD Case
-# TODO: Timing between SDDS and BulkIO
-# TODO: Merge upstream SRI
+        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
+
+
+
+    def testBulkIOTiming(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+        
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+            
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        pktNum = 0
+        
+        sr=1e6
+        xdelta_ns=int(1/(sr) * 1e9)
+        time_ns=0
+        
+        # No time slips here
+        while pktNum < 100:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4), CX=1)
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ns = time_ns + 512*xdelta_ns
+            
+        time.sleep(0.5)
+        data = sink.getData(tstamps=True)
+        bulkIO_time_array = data[1]
+        
+        now = datetime.datetime.utcnow()
+        first_of_year = datetime.datetime(now.year, 1, 1, tzinfo=UTC())
+        begin_of_time = datetime.datetime(1970, 1, 1, tzinfo=UTC())
+        
+        seconds_since_new_year = timedelta_total_seconds(first_of_year - begin_of_time)
+        
+        expected_time_ns = 0
+        
+        # So we expect the received bulkIO stream to be the start of the year + the time delta from the sample rate.
+        for bulkIO_time in bulkIO_time_array:
+            twsec = bulkIO_time[1].twsec
+            tfsec = bulkIO_time[1].tfsec
+            self.assertEqual(twsec, seconds_since_new_year, "BulkIO time stamp does not match received SDDS time stamp")
+            self.assertEqual(tfsec, expected_time_ns/1.0e9)
+            expected_time_ns = expected_time_ns + 512*xdelta_ns
+
+
+    def testUseBulkIOSRI(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+        
+        # Here we are using the BULKIO SRI with a modified xdelta and complex flag.
+        kw = [CF.DataType("BULKIO_SRI_PRIORITY", ossie.properties.to_tc_value(1, 'long'))]
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.234e-9, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
+        compDataSddsIn.pushSRI(sri,timestamp.now())  
+           
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+            
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        
+        h = Sdds.SddsHeader(0, CX=1)
+        p = Sdds.SddsShortPacket(h.header, fakeData)
+        p.encode() # Defaults to big endian encoding
+        self.userver.send(p.encodedPacket)
+        time.sleep(0.05)
+        data = sink.getData()
+        sri_rx = sink.sri()
+        
+        # compareSRI does not work for CF.DataType with keywords so we check those first then zero them out
+        self.assertEqual(sri.keywords[0].id, sri_rx.keywords[0].id, "SRI Keyword ID do not match")
+        self.assertEqual(sri.keywords[0].value.value(), sri_rx.keywords[0].value.value(), "SRI Keyword Value do not match")
+        self.assertEqual(sri.keywords[0].value.typecode(), sri_rx.keywords[0].value.typecode(), "SRI Keyword Type codes do not match")
+        sri.keywords = []
+        sri_rx.keywords = []
+        self.assertTrue(compareSRI(sri, sri_rx), "Attach SRI does not match received SRI")
+        
+    def testMergeBulkIOSRI(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+        
+        # Here we are using the BULKIO SRI with a modified xdelta and complex flag but the sdds xdelta and cx should merge in
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.234e-9, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='StreamID1234', blocking=False, keywords=[])
+        compDataSddsIn.pushSRI(sri,timestamp.now())  
+           
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+            
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        
+        h = Sdds.SddsHeader(0, CX=1)
+        p = Sdds.SddsShortPacket(h.header, fakeData)
+        p.encode() # Defaults to big endian encoding
+        self.userver.send(p.encodedPacket)
+        time.sleep(0.05)
+        data = sink.getData()
+        sri_rx = sink.sri()
+        
+        self.assertNotEqual(sri_rx.mode, sri.mode, "SDDS Packet Mode should have overridden the supplied SRI")
+        self.assertNotEqual(sri_rx.xdelta, sri.xdelta, "SDDS Packet xdelta should have overridden the supplied SRI")
+        self.assertEqual(sri_rx.streamID, sri.streamID, "Output SRI StreamID should have been inherited from the SRI")
+        
+# TODO: Speed test!
 # TODO: Socket Reader Thread affinity
 # TODO: BULKIO Thread affinity
 # TODO: Socket Reader priority
 # TODO: BULKIO priority
-# TODO: Speed test!
-# TODO: Upstream SRI
 
         
     # Test #16

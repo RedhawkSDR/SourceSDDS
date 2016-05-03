@@ -807,8 +807,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.advanced_optimizations.buffer_size = 200000
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
-        sink = sb.DataSink()
-
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         attachId = ''
 
@@ -891,8 +889,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.advanced_optimizations.buffer_size = 200000
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
-        sink = sb.DataSink()
-
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         attachId = ''
 
@@ -931,8 +927,56 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
                 time_ms = time_ms - ms_in_year
             
         self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
-    
-    
+
+    def testNaughtyDevice(self):
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        self.comp.advanced_optimizations.buffer_size = 200000
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
+
+        sink = sb.DataSink()
+
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+            
+        # Start components
+        self.comp.start()
+
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        pktNum = 0
+        
+        sr=1e6
+        xdelta_ms=int(1/(sr*2) * 1e9)
+        time_ms=0
+        
+        # No time slips here
+        while pktNum < 100:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ms*4), CX=1)
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ms = time_ms + 512*xdelta_ms
+            
+        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")    
+# TODO: Special MSDD Case
 # TODO: Timing between SDDS and BulkIO
 # TODO: Merge upstream SRI
 # TODO: Socket Reader Thread affinity

@@ -13,7 +13,7 @@ PREPARE_LOGGING(SddsToBulkIOProcessor)
 
 //TODO: Should accum_error_tolerance be a setable property?  Should we report it back?
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
-	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_sdds_time(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0), m_accum_error_tolerance(0.000001)
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_sdds_time(0), m_pkts_dropped(0), m_start_of_year(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0), m_accum_error_tolerance(0.000001),m_non_conforming_device(false)
 {
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
@@ -102,6 +102,21 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_first_packet = true;
 }
 
+void SddsToBulkIOProcessor::updateExpectedXdelta(double rate, bool complex) {
+	// Update our current sample rate and last times
+	m_current_sample_rate = rate;
+	// If complex then the samples per packet is half
+	int samps_per_packet = SDDS_DATA_SIZE / (m_bps / 8);
+
+	if (complex) {
+		samps_per_packet = samps_per_packet / 2;
+	}
+
+	m_max_time_step = ((double) (samps_per_packet + 1)) / m_current_sample_rate;
+	m_ideal_time_step = ((double) (samps_per_packet)) / m_current_sample_rate;
+	m_min_time_step = ((double) (samps_per_packet - 1)) / m_current_sample_rate;
+}
+
 /**
  * Returns true if this packet's sequence number matches the expected sequence number
  * Increments the expected sequence number if true.
@@ -115,21 +130,9 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 		m_current_ttv_flag = pkt->get_ttv();
 		m_expected_seq_number = pkt->get_seq();
 		m_bps = (pkt->bps == 31) ? 32 : pkt->bps;
+		m_last_sdds_time = 0;
 
-		// TODO: The get_rate returns the wrong value for the MSDD, how should we deal with this?
-		// Update our current sample rate and last times
-		m_current_sample_rate = pkt->get_rate();
-		int samps_per_packet = SDDS_DATA_SIZE / (m_bps / 8);
-
-		// If complex then the samples per packet is half
-		if (pkt->cx) {
-			samps_per_packet = samps_per_packet / 2;
-		}
-
-		m_max_time_step = ((double) (samps_per_packet + 1)) / m_current_sample_rate;
-		m_ideal_time_step = ((double) (samps_per_packet)) / m_current_sample_rate;
-		m_min_time_step = ((double) (samps_per_packet - 1)) / m_current_sample_rate;
-
+		updateExpectedXdelta(m_non_conforming_device ? pkt->get_rate() * 2 : pkt->get_rate(), pkt->cx != 0);
 		return true;
 	}
 
@@ -172,8 +175,17 @@ void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 	}
 
 	if (deltaTime > m_max_time_step || deltaTime < m_min_time_step) {
-		LOG_WARN(SddsToBulkIOProcessor, "Delta time of " << deltaTime << " occurred on packet: " << pkt->seq << " delta between packets expected to be between " << m_min_time_step  << " and " << m_max_time_step);
-		slip = true;
+		// XXX Special case here! Some devices, like the MSDD do not conform to the SDDS standard and the header contains a bad sample rate
+		// the sample rate is off by a factor of two which we detect here based on the xdelta and account for with the m_non_conforming_device boolean.
+		// we also check m_num_time_slips just in case we have a device that is slipping a lot and happens to fall into this position.
+		if (!m_non_conforming_device && pkt->cx != 0 && m_num_time_slips == 0 && 2*deltaTime < m_max_time_step && 2*deltaTime > m_min_time_step) {
+			LOG_INFO(SddsToBulkIOProcessor, "Based on the received XDelta between packets, it appears that these SDDS packets do not conform to the spec. This is a known issue for some devices (eg. MSDD) where the sample rate in the header is off by a factor of two. The expected XDelta has been adjusted, this will also be reflected in the output SRI unless overridden via SRI Keywords. In some cases (eg. if set to output 1 bulkIO push per SDDS packet) this may result in a single erroneous SRI push.");
+			m_non_conforming_device = true;
+			updateExpectedXdelta(2*m_current_sample_rate, pkt->cx != 0);
+		} else {
+			LOG_WARN(SddsToBulkIOProcessor, "Delta time of " << deltaTime << " occurred on packet: " << pkt->seq << " delta between packets expected to be between " << m_min_time_step  << " and " << m_max_time_step);
+			slip = true;
+		}
 	}
 
 	m_time_error_accum += deltaTime - m_ideal_time_step;
@@ -233,7 +245,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			}
 
 			if (!m_use_upstream_sri) {
-				mergeSddsSRI(pkt.get(), m_sri, sriChanged);
+				mergeSddsSRI(pkt.get(), m_sri, sriChanged, m_non_conforming_device);
 			}
 
 			if (sriChanged) {

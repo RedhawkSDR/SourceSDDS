@@ -106,11 +106,14 @@ unsigned short getBps(SDDSpacket* sdds_pkt) {
  * If values within the SRI object are changed, the changed boolean is set to true.
  * If no values within the SRI object is changed the boolean is set to false.
  */
-void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed) {
+void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed, bool non_conforming_device) {
 
 	CORBA::Double recXdelta = (CORBA::Double)(1.0 / sdds_pkt->get_rate());
-	// TODO: Remove this
-	recXdelta /= 2;
+
+	if (non_conforming_device) {
+		recXdelta *= 0.5;
+	}
+
 	if (recXdelta != sri.xdelta) {
 		changed = true;
 		sri.xdelta = recXdelta;

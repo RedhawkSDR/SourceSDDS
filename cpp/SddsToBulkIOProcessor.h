@@ -73,12 +73,14 @@ private:
 	long m_num_time_slips;
 	double m_current_sample_rate;
 	double m_max_time_step, m_min_time_step, m_ideal_time_step, m_time_error_accum, m_accum_error_tolerance;
+	bool m_non_conforming_device;
 
 	void processPackets(std::deque<SddsPacketPtr> &pktsToWork, std::deque<SddsPacketPtr> &pktsToRecycle);
 	bool orderIsValid(SddsPacketPtr &pkt);
 	void pushPacket();
 	void pushSri();
 	void checkForTimeSlip(SddsPacketPtr &pkt);
+	void updateExpectedXdelta(double rate, bool complex);
 };
 
 #endif /* SDDSTOBULKIOPROCESSOR_H_ */

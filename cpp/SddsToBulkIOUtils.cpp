@@ -54,13 +54,17 @@ BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime
 	T.tcmode = BULKIO::TCM_SDDS; //Timecode mode is SDDS
 	T.toff = 0; //The sample offset from the first sample time code is 0
 
-	// TODO: Why not just use the provided t.seconds()?
 	SDDSTime t = sdds_pkt->get_SDDSTime();
+
+	// XXX: We could replace a lot of this crazy logic here with the following two lines.....but I do not think it is as precise since our unit tests fail with rounding issues
+//	T.tfsec = modf(t.seconds(), &T.twsec);
+//	T.twsec += startOfYear; //add in the startofyear offset
+
 	unsigned long long frac_int = t.ps250() % 4000000000UL;
 	unsigned long long secs_int = t.ps250() - frac_int;
 	double frac_flt = frac_int / 4e9;
 	double secs_flt = secs_int / 4e9;
-	double ext_flt = 250e-12 * t.pf250() / 4294967296.0;
+	double ext_flt = 250e-12 * t.pf250() / SDDSTime_two32;
 	frac_flt += ext_flt;
 
 	/* this means the current year changed */

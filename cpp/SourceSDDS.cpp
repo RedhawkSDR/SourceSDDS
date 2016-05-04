@@ -267,7 +267,7 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 	m_attach_stream.id = stream.id;
 	m_attach_stream.multicastAddress = stream.multicastAddress;
 	m_attach_stream.port = stream.port;
-	m_attach_stream.sampleRate = stream.sampleRate;
+	m_attach_stream.sampleRate = stream.sampleRate; // TODO: I do not think we do anything with this information.
 	m_attach_stream.timeTagValid = stream.timeTagValid;
 	m_attach_stream.vlan = stream.vlan;
 

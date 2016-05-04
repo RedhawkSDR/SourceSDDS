@@ -18,7 +18,7 @@ from bulkio import timestamp
 import datetime
 from ossie.utils.bulkio.bulkio_helpers import compareSRI
 from ossie.utils.bulkio import bulkio_data_helpers
-
+import subprocess, signal, os
 
 class UTC(datetime.tzinfo):
     """UTC"""
@@ -1180,6 +1180,50 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertNotEqual(sri_rx.mode, sri.mode, "SDDS Packet Mode should have overridden the supplied SRI")
         self.assertNotEqual(sri_rx.xdelta, sri.xdelta, "SDDS Packet xdelta should have overridden the supplied SRI")
         self.assertEqual(sri_rx.streamID, sri.streamID, "Output SRI StreamID should have been inherited from the SRI")
+        
+        
+    def testSpeed(self):
+        print "------------ This test is informational only and should never fail ----------------------"
+                # Get ports
+        compDataSddsIn = self.comp.getPort('sdds_in')
+
+        # Set properties
+        self.comp.interface = 'lo'
+        
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        attachId = ''
+
+        # Try to attach
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test')
+        except:
+            attachId = ''
+
+
+        speed = 1000000.0
+        run = True
+        sleepTime = 2
+        target_threshold = 0.7
+        while (run):
+            self.comp.start()
+            command = ["../cpp/utils/sddsShooter", self.uni_ip, str(self.port), str(speed), str(sleepTime)]
+            p = subprocess.Popen(command, stdout=subprocess.PIPE)
+            max_speed_acheived = float(p.stdout.readline())
+            
+            if (max_speed_acheived / speed < target_threshold):
+                print "Sdds Shooter could not achieve the target speed of %s Mbps, max it could shoot was %s Mbps" % (str(8*speed/1024/1024), str(8*max_speed_acheived/1024/1024))
+                run = False
+            
+            
+            if self.comp.status.dropped_packets == 0:
+                speed = speed * 10
+            else:
+                run = False
+            
+            self.comp.stop()
+            
+        print "FINAL SPEED BEFORE BREAK: %s Mbps" % str(8*max_speed_acheived/1024/1024)
+            
         
 # TODO: Speed test!
 # TODO: Socket Reader Thread affinity

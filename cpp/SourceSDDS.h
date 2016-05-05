@@ -22,6 +22,7 @@ class SourceSDDS_i : public SourceSDDS_base, public bulkio::InSDDSPort::Callback
         int serviceFunction();
         char* attach(const BULKIO::SDDSStreamDefinition& stream, const char* userid) throw (BULKIO::dataSDDS::AttachError, BULKIO::dataSDDS::StreamInputError);
 		void detach(const char* attachId);
+		void newSriListener(const BULKIO::StreamSRI & newSri);
     private:
         SmartPacketBuffer<SDDSpacket> m_pktbuffer;
 

@@ -28,12 +28,19 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
 
 	sdds_in->setNewAttachDetachCallback(this);
+	sdds_in->setNewSriListener(this, &SourceSDDS_i::newSriListener);
+	sdds_in->setSriChangeListener(this, &SourceSDDS_i::newSriListener);
 
 	m_attach_stream.attached = false;
 }
 
 SourceSDDS_i::~SourceSDDS_i()
 {
+}
+
+void SourceSDDS_i::newSriListener(const BULKIO::StreamSRI & newSri) {
+	LOG_INFO(SourceSDDS_i, "Received new upstream SRI");
+	m_sddsToBulkIO.setUpstreamSri(newSri);
 }
 
 struct status_struct SourceSDDS_i::get_status_struct() {
@@ -230,8 +237,11 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 }
 
 void SourceSDDS_i::stop () throw (CF::Resource::StopError, CORBA::SystemException) {
+	LOG_DEBUG(SourceSDDS_i, "Stop Called cleaning up");
 	destroyBuffersAndJoinThreads();
+	LOG_DEBUG(SourceSDDS_i, "Calling parent stop method");
 	SourceSDDS_base::stop();
+	LOG_DEBUG(SourceSDDS_i, "Finished stopping");
 }
 
 /**
@@ -256,6 +266,7 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 
 	bool restart = false;
 
+	// This can happen if the user has set attachment override to false while the component is running.
 	if (started() && !attachment_override.enabled) {
 		LOG_WARN(SourceSDDS_i, "Cannot setup connection via attach when already running, will stop, attach, and restart");
 		restart = true;
@@ -267,13 +278,6 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 	m_attach_stream.multicastAddress = stream.multicastAddress;
 	m_attach_stream.port = stream.port;
 	m_attach_stream.vlan = stream.vlan;
-
-	// XXX: If attachment_override is set should we still accept SRIs from the bulkIO port?
-	if (sdds_in->attachedSRIs()->length() > 0) {
-		m_sddsToBulkIO.setUpstreamSri(sdds_in->attachedSRIs()->get_buffer()[0]);
-	} else {
-		LOG_DEBUG(SourceSDDS_i, "Received attach but there is no SRI.");
-	}
 
 	if (restart) {
 		start();

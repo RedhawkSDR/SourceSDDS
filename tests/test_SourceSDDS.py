@@ -1199,33 +1199,42 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         except:
             attachId = ''
 
-
-        speed = 1000000.0
+        target_speed = 1000000.0
         run = True
         sleepTime = 2
         target_threshold = 0.7
+        speed_bump = 10.0
+        last_num_dropped = 0
+        top_speed = 0
+        
         while (run):
             self.comp.start()
-            command = ["../cpp/utils/sddsShooter", self.uni_ip, str(self.port), str(speed), str(sleepTime)]
+            
+            command = ["../cpp/utils/sddsShooter", self.uni_ip, str(self.port), str(target_speed), str(sleepTime)]
             p = subprocess.Popen(command, stdout=subprocess.PIPE)
             max_speed_acheived = float(p.stdout.readline())
             
-            if (max_speed_acheived / speed < target_threshold):
-                print "Sdds Shooter could not achieve the target speed of %s Mbps, max it could shoot was %s Mbps" % (str(8*speed/1024/1024), str(8*max_speed_acheived/1024/1024))
+            if (max_speed_acheived / target_speed < target_threshold):
+                print "Sdds Shooter could not achieve the target speed of %s Mbps, max it could shoot was %s Mbps" % (str(8*target_speed/1024/1024), str(8*max_speed_acheived/1024/1024))
                 run = False
             
-            
-            if self.comp.status.dropped_packets == 0:
-                speed = speed * 10
+            if self.comp.status.dropped_packets == last_num_dropped:
+                target_speed = target_speed * speed_bump
+                top_speed = max_speed_acheived
             else:
+                last_num_dropped = self.comp.status.dropped_packets
+                target_speed = target_speed / speed_bump # Resets us back to our previous speed. 
+                speed_bump = speed_bump / 2
+                run = False
+                
+            if speed_bump < 1.1:
                 run = False
             
             self.comp.stop()
             
-        print "FINAL SPEED BEFORE BREAK: %s Mbps" % str(8*max_speed_acheived/1024/1024)
+        print "Final speed hit: %s Mbps" % str(8*top_speed/1024/1024)
             
         
-# TODO: Speed test!
 # TODO: Socket Reader Thread affinity
 # TODO: BULKIO Thread affinity
 # TODO: Socket Reader priority

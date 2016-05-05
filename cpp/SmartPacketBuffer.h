@@ -87,11 +87,11 @@ public:
     	return retVal;
     }
 
-    // TODO: I bet we can template this function so it doesnt have to be a deque
     /**
      * Fill the provided container until it is len in size of empty buffers.
      */
-    void pop_empty_buffers(std::deque<TypePtr> &que, size_t len) {
+    template<typename Container>
+    void pop_empty_buffers(Container &que, size_t len) {
     		// Maybe they have what they want already
         	if (que.size() >= len)
         		return;
@@ -117,12 +117,12 @@ public:
     	m_no_full_buffers.notify_one();
     }
 
-    // TODO: I bet we can template this function so it doesn't have to be a deque passed in
     /**
      * Pushes all the buffers contained in provided container onto the full buffer deque
      * and clears the given container.
      */
-    void push_full_buffers(std::deque<TypePtr> &que, size_t num) {
+    template<typename Container>
+    void push_full_buffers(Container &que, size_t num) {
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
 		m_full_buffers.insert(m_full_buffers.end(), que.begin(), que.begin() + num);
 		que.erase(que.begin(), que.begin() + num);
@@ -141,11 +141,11 @@ public:
 	}
 
 
-    // TODO: I bet we can template this function so it doesn't have to be a deque passed in
     /**
      * Fill the provided container until it is len in size of full buffers.
      */
-    void pop_full_buffers(std::deque<TypePtr> &que, size_t len) {
+    template<typename Container>
+    void pop_full_buffers(Container &que, size_t len) {
 		// Maybe they have what they want already
     	if (que.size() >= len)
     		return;
@@ -169,8 +169,8 @@ public:
     	m_no_empty_buffers.notify_one();
     }
 
-    // TODO: I bet we can template this function so it doesn't have to be a deque passed in
-    void recycle_buffers(std::deque<TypePtr> &que) {
+    template<typename Container>
+    void recycle_buffers(Container &que) {
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
     	m_empty_buffers.insert(m_empty_buffers.end(), que.begin(), que.end());
     	que.clear();

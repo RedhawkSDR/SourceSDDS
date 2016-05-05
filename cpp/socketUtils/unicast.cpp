@@ -12,15 +12,15 @@
 #include <string>
 #include <iostream>
 #include "unicast.h"
+#include <ossie/debug.h>
 
 /* it is probably desirable to convert to C++ and throw exceptions instead. */
 static inline void verify_ (int condition, const char* message, const char* condtext, const char* file, int line) {
   if (!condition) {
-	char msg[100];
-	sprintf(msg, "Verify failed '%s' at line %d: %s (%s)\n", file, line, message, condtext);
-	fprintf(stderr, msg);
-    perror("perror");
-    throw(BadParameterError3(msg));
+	  std::stringstream ss;
+	  ss << "Verify failed " << file << " at line " << line << ": " << message << " (" << condtext << ")";
+	RH_NL_ERROR("unicast", ss.str());
+    throw(BadParameterError3(ss.str()));
   }
 }
 #define verify(CONDITION, MESSAGE) verify_(CONDITION, MESSAGE, #CONDITION, __FILE__, __LINE__)
@@ -67,8 +67,7 @@ static unicast_t unicast_open_ (const char* iface, const char* group, int port)
 		  }catch(...){};
 	  }
   }
-  // TODO: replace with logs, if we get here we probably didn't find the interface requested.
-  printf("Closing unicast.sock\n");
+  RH_NL_WARN("unicast", "Could not find the interface requested, closing socket");
 
   /* If we get here, we've failed. */
   close(unicast.sock);

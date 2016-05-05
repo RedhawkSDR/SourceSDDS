@@ -12,6 +12,7 @@
 #include <string>
 #include "multicast.h"
 #include "SourceNicUtils.h"
+#include <ossie/debug.h>
 
 static multicast_t multicast_open_ (const char* iface, const char* group, int port)
 {
@@ -81,7 +82,8 @@ static multicast_t multicast_open_ (const char* iface, const char* group, int po
 		  }catch(...){};
 	  }
   }
-  printf("Closing multicast.sock\n");
+
+  RH_NL_WARN("multicast", "Could not find the interface requested, closing socket");
 
   /* If we get here, we've failed. */
   close(multicast.sock);

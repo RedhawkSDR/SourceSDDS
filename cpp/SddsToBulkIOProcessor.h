@@ -75,6 +75,7 @@ private:
 	double m_current_sample_rate;
 	double m_max_time_step, m_min_time_step, m_ideal_time_step, m_time_error_accum, m_accum_error_tolerance;
 	bool m_non_conforming_device;
+	boost::mutex m_upstream_sri_lock;
 
 	void processPackets(std::deque<SddsPacketPtr> &pktsToWork, std::deque<SddsPacketPtr> &pktsToRecycle);
 	bool orderIsValid(SddsPacketPtr &pkt);

@@ -72,7 +72,6 @@ void SddsToBulkIOProcessor::setPushOnTTV(bool push_on_ttv) {
 	m_push_on_ttv = push_on_ttv;
 }
 
-// TODO: Can we pass by reference?
 void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_running = true;
 	m_shuttingDown = false;
@@ -240,9 +239,14 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 			// We can assume that the SDDS streams SRI (xdelta) should stay the same for a given stream.
 			bool sriChanged = false;
-			if (m_upstream_sri_set && m_new_upstream_sri) {
-				m_new_upstream_sri = false;
-				mergeUpstreamSRI(m_sri, m_upstream_sri, m_use_upstream_sri, sriChanged, m_endianness);
+
+
+			{
+				boost::unique_lock<boost::mutex> lock(m_upstream_sri_lock);
+				if (m_upstream_sri_set && m_new_upstream_sri) {
+					m_new_upstream_sri = false;
+					mergeUpstreamSRI(m_sri, m_upstream_sri, m_use_upstream_sri, sriChanged, m_endianness);
+				}
 			}
 
 			if (!m_use_upstream_sri) {
@@ -380,18 +384,14 @@ uint16_t SddsToBulkIOProcessor::getExpectedSequenceNumber() {
 }
 
 void SddsToBulkIOProcessor::setUpstreamSri(BULKIO::StreamSRI upstream_sri) {
-	// TODO: Protect the SRI or only allow when stopped.
+	boost::unique_lock<boost::mutex> lock(m_upstream_sri_lock);
+	m_upstream_sri = upstream_sri;
 	m_upstream_sri_set = true;
 	m_new_upstream_sri = true;
-	m_upstream_sri = upstream_sri;
 }
 
 void SddsToBulkIOProcessor::unsetUpstreamSri() {
-	//TODO: This will likely be called in another thread and may cause stability issues if we are currently running.
-	// I rather not add a lock but probably should if this is going to be called while the component is running.
-	if (m_running) {
-		LOG_WARN(SddsToBulkIOProcessor, "Unsetting upstream SRI while running may cause stability issues.")
-	}
+	boost::unique_lock<boost::mutex> lock(m_upstream_sri_lock);
 	m_use_upstream_sri = false;
 	m_upstream_sri_set = false;
 	m_endianness = ENDIANNESS::ENDIAN_DEFAULT; // Default to big endian

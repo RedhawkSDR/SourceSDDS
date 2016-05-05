@@ -41,12 +41,9 @@ class SourceSDDS_i : public SourceSDDS_base, public bulkio::InSDDSPort::Callback
 
         struct attach_stream {
             std::string id;
-            BULKIO::SDDSDataDigraph dataFormat;
             std::string multicastAddress;
             uint16_t vlan;
             uint16_t port;
-            long sampleRate;
-            bool timeTagValid;
             bool attached;
         };
 

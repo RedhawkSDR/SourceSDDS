@@ -57,6 +57,13 @@
       <kind kindtype="property"/>
       <action type="external"/>
     </simple>
+    <simple id="attachment_override:endianness" name="endianness" type="string">
+      <value>4321</value>
+      <enumerations>
+        <enumeration label="Little Endian" value="1234"/>
+        <enumeration label="Big Endian" value="4321"/>
+      </enumerations>
+    </simple>
     <configurationkind kindtype="property"/>
   </struct>
   <simple id="interface" mode="readwrite" name="interface" type="string">
@@ -106,7 +113,7 @@
       <value>0</value>
     </simple>
     <simple id="status::input_endianness" name="input_endianness" type="string">
-      <value>1234</value>
+      <value>4321</value>
       <enumerations>
         <enumeration label="Little Endian" value="1234"/>
         <enumeration label="Big Endian" value="4321"/>

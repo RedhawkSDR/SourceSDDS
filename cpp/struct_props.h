@@ -121,6 +121,7 @@ struct attachment_override_struct {
         ip_address = "127.0.0.1";
         vlan = 0;
         port = 29495;
+        endianness = "4321";
     };
 
     static std::string getId() {
@@ -131,6 +132,7 @@ struct attachment_override_struct {
     std::string ip_address;
     unsigned short vlan;
     unsigned short port;
+    std::string endianness;
 };
 
 inline bool operator>>= (const CORBA::Any& a, attachment_override_struct& s) {
@@ -149,6 +151,9 @@ inline bool operator>>= (const CORBA::Any& a, attachment_override_struct& s) {
     if (props.contains("attachment_override:port")) {
         if (!(props["attachment_override:port"] >>= s.port)) return false;
     }
+    if (props.contains("attachment_override:endianness")) {
+        if (!(props["attachment_override:endianness"] >>= s.endianness)) return false;
+    }
     return true;
 }
 
@@ -162,6 +167,8 @@ inline void operator<<= (CORBA::Any& a, const attachment_override_struct& s) {
     props["attachment_override::vlan"] = s.vlan;
  
     props["attachment_override:port"] = s.port;
+ 
+    props["attachment_override:endianness"] = s.endianness;
     a <<= props;
 }
 
@@ -173,6 +180,8 @@ inline bool operator== (const attachment_override_struct& s1, const attachment_o
     if (s1.vlan!=s2.vlan)
         return false;
     if (s1.port!=s2.port)
+        return false;
+    if (s1.endianness!=s2.endianness)
         return false;
     return true;
 }
@@ -242,7 +251,7 @@ struct status_struct {
         input_address = "";
         input_port = 0;
         input_vlan = 0;
-        input_endianness = "1234";
+        input_endianness = "4321";
         input_samplerate = 0;
         input_stream_id = "";
         time_slips = 0LL;

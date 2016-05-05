@@ -4,6 +4,12 @@
 #include "sddspacket.h"
 #include <bulkio/bulkio.h>
 
+namespace ENDIANNESS {
+	const std::string BIG_ENDIAN_STR = "4321";
+	const std::string LITTLE_ENDIAN_STR = "1234";
+	const std::string ENDIAN_DEFAULT = BIG_ENDIAN_STR;
+}
+
 time_t getStartOfYear();
 BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime &last_sdds_time, time_t &startOfYear);
 unsigned short getBps(SDDSpacket* sdds_pkt);

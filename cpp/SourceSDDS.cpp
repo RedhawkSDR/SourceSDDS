@@ -263,12 +263,9 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 	}
 
 	m_attach_stream.attached = true;
-	m_attach_stream.dataFormat = stream.dataFormat;
 	m_attach_stream.id = stream.id;
 	m_attach_stream.multicastAddress = stream.multicastAddress;
 	m_attach_stream.port = stream.port;
-	m_attach_stream.sampleRate = stream.sampleRate; // TODO: I do not think we do anything with this information.
-	m_attach_stream.timeTagValid = stream.timeTagValid;
 	m_attach_stream.vlan = stream.vlan;
 
 	// XXX: If attachment_override is set should we still accept SRIs from the bulkIO port?
@@ -317,6 +314,9 @@ void SourceSDDS_i::setupSddsToBulkIOOptions() {
 
 	m_sddsToBulkIO.setPushOnTTV(advanced_configuration.push_on_ttv);
 	m_sddsToBulkIO.setWaitForTTV(advanced_configuration.wait_on_ttv);
+	if (attachment_override.enabled) {
+		m_sddsToBulkIO.setEndianness(attachment_override.endianness);
+	}
 }
 void SourceSDDS_i::constructor()
 {

@@ -45,6 +45,7 @@ public:
 	std::string getStreamId();
 	double getSampleRate();
 	std::string getEndianness();
+	void setEndianness(std::string endianness);
 	long getTimeSlips();
 private:
 	size_t m_pkts_per_read;

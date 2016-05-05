@@ -13,17 +13,13 @@ PREPARE_LOGGING(SddsToBulkIOProcessor)
 
 //TODO: Should accum_error_tolerance be a setable property?  Should we report it back?
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
-	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_sdds_time(0), m_pkts_dropped(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(""), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0), m_accum_error_tolerance(0.000001),m_non_conforming_device(false)
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_sdds_time(0), m_pkts_dropped(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(ENDIANNESS::ENDIAN_DEFAULT), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0), m_accum_error_tolerance(0.000001),m_non_conforming_device(false)
 {
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
 
 	// Needs to be initialized.
 	m_sri.streamID = "DEFAULT_SDDS_STREAM_ID";
-
-	std::stringstream ss;
-	ss << __BYTE_ORDER;
-	m_endianness = ss.str();
 
 	m_start_of_year = getStartOfYear();
 }
@@ -334,7 +330,7 @@ void SddsToBulkIOProcessor::pushPacket() {
 		}
 
 		// Ugh, we need to byte swap. At least there is a nice builtin for swapping bytes for shorts.
-		if (!m_endianness.empty() && m_endianness != "" && atol(m_endianness.c_str()) != __BYTE_ORDER) {
+		if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
 			swab(&m_bulkIO_data[0], &m_bulkIO_data[0], m_bulkIO_data.size());
 		}
 
@@ -345,9 +341,9 @@ void SddsToBulkIOProcessor::pushPacket() {
 			m_float_out->pushSRI(m_sri);
 		}
 
-		// Ugh, we need to byte swap and for floats there is no nice method for us to use like their is for shorts. Time to iterate.
-		if (!m_endianness.empty() && m_endianness != "" && atol(m_endianness.c_str()) != __BYTE_ORDER) {
-			float *buf = reinterpret_cast<float*>(&m_bulkIO_data[0]);
+		// Ugh, we need to byte swap and for floats there is no nice method for us to use like there is for shorts. Time to iterate.
+		if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
+			uint32_t *buf = reinterpret_cast<uint32_t*>(&m_bulkIO_data[0]);
 			for (size_t i = 0; i < m_bulkIO_data.size() / sizeof(float); ++i) {
 				buf[i] = __builtin_bswap32(buf[i]);
 			}
@@ -398,9 +394,7 @@ void SddsToBulkIOProcessor::unsetUpstreamSri() {
 	}
 	m_use_upstream_sri = false;
 	m_upstream_sri_set = false;
-	std::stringstream ss;
-	ss << __BYTE_ORDER;
-	m_endianness = ss.str();
+	m_endianness = ENDIANNESS::ENDIAN_DEFAULT; // Default to big endian
 }
 
 std::string SddsToBulkIOProcessor::getStreamId() {
@@ -413,6 +407,20 @@ double SddsToBulkIOProcessor::getSampleRate() {
 
 std::string SddsToBulkIOProcessor::getEndianness() {
 	return m_endianness;
+}
+
+void SddsToBulkIOProcessor::setEndianness(std::string endianness) {
+	if (m_running) {
+		LOG_ERROR(SddsToBulkIOProcessor, "Cannot change endianness while running.");
+		return;
+	}
+
+	if (endianness != ENDIANNESS::BIG_ENDIAN_STR && endianness != ENDIANNESS::LITTLE_ENDIAN_STR) {
+		LOG_ERROR(SddsToBulkIOProcessor, "Tried to set endianness to unknown value: " << endianness << " Endianness will not be changed.");
+		return;
+	}
+
+	m_endianness = endianness;
 }
 
 long SddsToBulkIOProcessor::getTimeSlips() {

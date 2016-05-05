@@ -1,11 +1,6 @@
 #include "SddsToBulkIOUtils.h"
 #include "ossie/debug.h"
 
-namespace ENDIANNESS {
-	const std::string BIG_ENDIAN_STR = "4321";
-	const std::string LITTLE_ENDIAN_STR = "1234";
-}
-
 /****************************************************************************************
  * setStartOfYear()
  *
@@ -163,7 +158,7 @@ bool compareSRI(BULKIO::StreamSRI A, BULKIO::StreamSRI B) {
 	return same;
 }
 
-void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, std::string &endianness) {
+void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, std::string &endianness_comp) {
 	if (!compareSRI(currSRI, upstreamSRI)) {
 		changed = true;
 		currSRI.streamID = upstreamSRI.streamID;
@@ -188,14 +183,19 @@ void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI
 			if (std::string(upstreamSRI.keywords[i].id) == "BULKIO_SRI_PRIORITY" || std::string(upstreamSRI.keywords[i].id) == "use_BULKIO_SRI" || std::string(upstreamSRI.keywords[i].id) == "sddsPacketAlt") {
 				useUpstream = true;
 			} else if (std::string(upstreamSRI.keywords[i].id) == "dataRef" || std::string(upstreamSRI.keywords[i].id) == "DATA_REF_STR") {
-				endianness = ossie::any_to_string(upstreamSRI.keywords[i].value);
-				if (endianness == "43981") { // In hex this is 0xabcd
-					endianness = ENDIANNESS::LITTLE_ENDIAN_STR;
-				} else if (endianness == "52651") {
-					endianness = ENDIANNESS::BIG_ENDIAN_STR;
+				std::string endianness_sri = ossie::any_to_string(upstreamSRI.keywords[i].value);
+				if (endianness_sri == "43981" || endianness_sri == ENDIANNESS::LITTLE_ENDIAN_STR) { // In hex this is 0xabcd
+					endianness_comp = ENDIANNESS::LITTLE_ENDIAN_STR;
+				} else if (endianness_sri == "52651" || endianness_sri == ENDIANNESS::BIG_ENDIAN_STR) {
+					endianness_comp = ENDIANNESS::BIG_ENDIAN_STR;
+				} else {
+					RH_NL_ERROR("SddsToBulkIOUtils",  "SRI contained unknown endianness value: " << endianness_sri <<
+							" Value must be either: 43981 or 1234 for Little Endian and  52651 or 4321 for Big Endian");
+					RH_NL_WARN("SddsToBulkIOUtils", "Endianness being reset to default");
+					endianness_comp = ENDIANNESS::ENDIAN_DEFAULT;
 				}
 
-				currSRI.keywords[i].value <<= CORBA::string_dup(endianness.c_str());
+				currSRI.keywords[i].value <<= CORBA::string_dup(endianness_sri.c_str());
 			}
 		}
 

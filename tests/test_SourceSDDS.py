@@ -329,7 +329,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(len(data), 256)
         
         # Validate data is correct
-        self.assertEqual(fakeData, list(struct.unpack('>256f', struct.pack('256f', *data))))
+        self.assertEqual(fakeData, list(struct.unpack('256f', struct.pack('<256f', *data))))
         self.assertEqual(self.comp.status.dropped_packets, 0)
         
         sink.stop()
@@ -390,7 +390,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(len(data), 512)
 
         # Validate data is correct        
-        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('512h', *data))))
+        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))
         
         sink.stop()
         
@@ -504,9 +504,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Validate correct amount of data was received
         self.assertEqual(len(data), 1024)
-
-        #         self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('512h', *data[:512]))))
-        self.assertEqual(2*fakeData, list(struct.unpack('>1024H', struct.pack('1024h', *data[:]))))
+        self.assertEqual(2*fakeData, list(struct.unpack('>1024H', struct.pack('>1024H', *data[:]))))
         self.assertEqual(self.comp.status.dropped_packets, 65535)
         sink.stop()
 
@@ -786,7 +784,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
 
-        kw = []
+        kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(43981, 'long'))]
         sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
         compDataSddsIn.pushSRI(sri,timestamp.now())  
         
@@ -1189,6 +1187,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Set properties
         self.comp.interface = 'lo'
+        
+        # Make it little endian so we do not have to run the bytewap
+        kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(43981, 'long'))]
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
+        compDataSddsIn.pushSRI(sri,timestamp.now())  
         
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         attachId = ''

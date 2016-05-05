@@ -32,10 +32,6 @@ void SocketReader::shutDown() {
 	LOG_DEBUG(SocketReader, "Shutting down the socket reader");
 	m_shuttingDown = true;
 	m_running = false;
-	LOG_DEBUG(SocketReader, "Closing socket");
-
-	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection)); }
-	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			memset(&m_unicast_connection, 0, sizeof(m_unicast_connection)); }
 }
 
 void SocketReader::setPktsPerRead(size_t pkts_per_read) {
@@ -198,6 +194,10 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	// XXX If we ever switch to a single producer single consumer no-lock no-wait data structure this may mess things up.
 	pktbuffer->recycle_buffers(bufQue);
 	m_running = false;
+
+	LOG_DEBUG(SocketReader, "Closing socket");
+	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection)); }
+	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			memset(&m_unicast_connection, 0, sizeof(m_unicast_connection)); }
 }
 
 /** Returns true on success, or false if there was an error */

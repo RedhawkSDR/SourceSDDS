@@ -106,6 +106,7 @@ size_t SocketReader::getSocketBufferSize() {
  */
 void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	LOG_DEBUG(SocketReader, "Starting to run");
+	pthread_setname_np(pthread_self(), "SocketReader");
 	m_shuttingDown = false;
 	m_running = true;
 	struct pollfd poll_struct[1];
@@ -167,14 +168,13 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 			pktbuffer->pop_empty_buffers(bufQue, m_pkts_per_read);
 
 			// Re-point the iovecs to the new buffers
-			// Note that the logic would be a lot simpler to go from i = 0 however if we did not use all
-			// of our buffers in the last iteration they are already pointed to the right spot. No need to loop through everything.
+			// Note that we've added pktsReadThisPass to the top of the bufQue so we only have to repoint the new buffers
 			for (i = 0; i < (size_t) pktsReadThisPass; ++i) {
 				iovecs[i].iov_base = bufQue[i].get();
 			}
 			break;
 
-		// Same as EAGAIN
+		// Same value as EAGAIN
 		case EWOULDBLOCK: // No data was available. Wait for data.
 			poll(poll_struct, 1, 100); // 100 ms max wait poll if no data is available.
 			errno = 0;

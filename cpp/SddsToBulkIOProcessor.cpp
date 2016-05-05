@@ -80,6 +80,7 @@ void SddsToBulkIOProcessor::setPushOnTTV(bool push_on_ttv) {
 void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_running = true;
 	m_shuttingDown = false;
+	pthread_setname_np(pthread_self(), "SddsToBulkIOProcessor");
 
 	// Feed in packets to process,
 	// Since these are deques there is no reserve so we can just throw it on the stack.

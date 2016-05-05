@@ -6,7 +6,7 @@ xmldir = $(prefix)/dom/components/rh/SourceSDDS/
 dist_xml_DATA = ../SourceSDDS.scd.xml ../SourceSDDS.prf.xml ../SourceSDDS.spd.xml
 ACLOCAL_AMFLAGS = -I m4 -I${OSSIEHOME}/share/aclocal/ossie
 AUTOMAKE_OPTIONS = subdir-objects
-SUBDIRS=utils
+SUBDIRS=test_utils
 
 
 distclean-local:

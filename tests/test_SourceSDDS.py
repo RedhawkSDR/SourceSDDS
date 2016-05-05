@@ -20,6 +20,10 @@ from ossie.utils.bulkio.bulkio_helpers import compareSRI
 from ossie.utils.bulkio import bulkio_data_helpers
 import subprocess, signal, os
 
+
+LITTLE_ENDIAN=1234
+BIG_ENDIAN=4321
+
 class UTC(datetime.tzinfo):
     """UTC"""
 
@@ -32,34 +36,6 @@ class UTC(datetime.tzinfo):
     def dst(self, dt):
         return datetime.timedelta(0)
     
-class SDDSSink(BULKIO__POA.dataSDDS):
-    def attach(self, stream, userid):
-        self.port_lock.acquire()
-        try:
-            try:
-                for connId, port in self.outPorts.items():
-                    if port != None: r = port.attach(stream, userid)
-                    return r
-            except Exception, e:
-                msg = "The call to attach failed with %s " % e
-                msg += "connection %s instance %s" % (connId, port)
-                print(msg)
-        finally:
-            self.port_lock.release()
-
-    def detach(self, attachId):
-        self.port_lock.acquire()
-        try:
-            try:
-                for connId, port in self.outPorts.items():
-                    if port != None: port.detach(attachId)
-            except Exception, e:
-                msg = "The call to detach failed with %s " % e
-                msg += "connection %s instance %s" % (connId, port)
-                print(msg)
-        finally:
-            self.port_lock.release()
-
 def timedelta_total_seconds(timedelta):
     return (
         timedelta.microseconds + 0.0 +
@@ -68,18 +44,37 @@ def timedelta_total_seconds(timedelta):
 class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
     """Test for all component implementations in SelectionService"""
 
-    # Test #1
+    def setupComponent(self, endianness=BIG_ENDIAN, pkts_per_push=1, sri=None):
+        # Set properties
+        self.comp.interface = 'lo'
+        compDataSddsIn = self.comp.getPort('sdds_in')
+        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = pkts_per_push
+        
+        if sri is None:        
+            kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(endianness, 'long'))]
+            sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
+            
+        compDataSddsIn.pushSRI(sri,timestamp.now())  
+        
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        
+        # Try to attach
+        attachId = ''
+        
+        try:
+            attachId = compDataSddsIn.attach(streamDef, 'test') 
+        except:
+            print "ATTACH FAILED"
+            attachId = ''
+        
+        self.assertTrue(attachId != '', "Failed to attach to SourceSDDS component")
+        
     def testScaBasicBehavior(self):
         """Basic test, start, stop and query component"""
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '###################################################################'
-        self.comp.advanced_optimizations.buffer_size = 200000
+        self.setupComponent()
+        
         #######################################################################
         # Verify the basic state of the component
-        execparams = self.getPropertySet(kinds=("execparam",), modes=("readwrite", "writeonly"), includeNil=False)
-        execparams = dict([(x.id, any.from_any(x.value)) for x in execparams])
-        self.launch(execparams)
         self.assertNotEqual(self.comp, None)
         self.assertEqual(self.comp_obj._non_existent(), False)
         self.assertEqual(self.comp_obj._is_a("IDL:CF/Resource:1.0"), True)
@@ -119,14 +114,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Simulate regular component shutdown
         self.comp.releaseObject()
 
-    # Test #2
     def testUnicastAttachSuccess(self):
         """Attaches to the sdds_in port 10 times making sure that it occurs successfully each time"""
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '###################################################################'
-           
-        self.comp.advanced_optimizations.buffer_size = 200000
         
         compDataSddsIn = self.comp.getPort('sdds_in')
  
@@ -145,37 +134,16 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             count = count + 1
             if count == 10:
                 valid = False
-                
-    # Test #4 TTV become true after 500 packets
+
     def testUnicastTTVBecomesTrue(self):
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '###################################################################'
+        
+        self.setupComponent()
+        
         # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
-        
-        # Set properties
-        self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        
         sink = sb.DataSink()
-        
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
         
         # Connect components
         self.comp.connect(sink, providesPortName='octetIn')
-        
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            print "ATTACH FAILED"
-            attachId = ''
-        
-        # Wait for the attach
-        time.sleep(1)
         
         # Start components
         self.comp.start()
@@ -211,43 +179,22 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         sink.stop()
         
 
-    # Test #6
     def testUnicastOctetPort(self):
         """Sends unicast data to the octet port and asserts the data sent equals the data received"""
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '###################################################################'
 
+        self.setupComponent()
+        
         # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
         compDataOctetOut_out = self.comp.getPort('octet_out')
 
         # Set properties
-        self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.buffer_size = 200000
-        
         sink = sb.DataSink()
-
-        streamDef = BULKIO.SDDSStreamDefinition('charTest', BULKIO.SDDS_SB, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-        
         # Connect components
         self.comp.connect(sink, providesPortName='octetIn')
-        
-        
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
 
         # Start components
         self.comp.start()
         sink.start()
-
-        # Wait for the attach
-        time.sleep(1)
 
         # Create data
         fakeData = [x % 256 for x in range(1024)]
@@ -259,7 +206,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.userver.send(p.encodedPacket)
 
         # Wait for data to be received
-        time.sleep(3)
+        time.sleep(1)
         
         # Get data
         data = sink.getData()
@@ -273,42 +220,22 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         sink.stop()
         
 
-    # Test #8
     def testUnicastFloatPort(self):
         """Sends unicast data to the float port and asserts the data sent equals the data received"""
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '###################################################################'
 
-        # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataFloatOut_out = self.comp.getPort('float_out')
+        self.setupComponent()
         
-        # Set properties
-        self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.buffer_size = 200000
+        # Get ports
+        compDataFloatOut_out = self.comp.getPort('float_out')
         
         sink = sb.DataSink()
  
-        streamDef = BULKIO.SDDSStreamDefinition('floatTest', BULKIO.SDDS_SF, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-        
         # Connect components
         self.comp.connect(sink, providesPortName='floatIn')
-        
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
         
         #Start components.
         self.comp.start()
         sink.start()
-
-        # Wait for the attach
-        time.sleep(1)
 
         # Create data
         fakeData = [float(x) for x in range(0, 256)]
@@ -320,7 +247,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.userver.send(p.encodedPacket)
 
         # Wait for data to be received
-        time.sleep(3)
+        time.sleep(1)
         
         # Get data
         data = sink.getData()
@@ -335,41 +262,20 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         sink.stop()
         
 
-    # Test #10
     def testUnicastShortPort(self):
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '###################################################################'
 
+        self.setupComponent()
+        
         # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
         compDataShortOut_out = self.comp.getPort('short_out')
-        
-        # Set properties
-        self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.buffer_size = 200000
-        
         sink = sb.DataSink()
 
-        streamDef = BULKIO.SDDSStreamDefinition('shortTest', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-        
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-        
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
         
         # Start components
         self.comp.start()
         sink.start()
-
-        #Wait for the attach
-        time.sleep(1)
 
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -381,7 +287,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.userver.send(p.encodedPacket)
         
         # Wait for data to be received
-        time.sleep(3)
+        time.sleep(1)
         
         # Get data
         data = sink.getData()
@@ -395,38 +301,17 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         sink.stop()
         
 
-    # Test #12
     def testUnicastCxBit(self):
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '###################################################################'
-
+        
+        self.setupComponent()
+        
         # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
         compDataShortOut_out = self.comp.getPort('short_out')
 
-        # Set properties
-        self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.buffer_size = 200000
-        
         sink = sb.DataSink()
-
-        streamDef = BULKIO.SDDSStreamDefinition('shortTest', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
 
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-
-        
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
-
-        # Wait for the attach
-        time.sleep(1)
         
         # Start components
         self.comp.start()
@@ -442,49 +327,28 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.userver.send(p.encodedPacket)
 
         # Wait for data to be received
-        time.sleep(3)
+        time.sleep(1)
         
         # Validate sri mode is correct
         self.assertEqual(sink.sri().mode, 1)
         
         sink.stop()
 
-    # Test #14
     def testUnicastBadFsn(self):
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '\tNote: Warning of dropped packets is expected.'
-        print '###################################################################'
 
+        self.setupComponent()
+        
         # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
         compDataShortOut_out = self.comp.getPort('short_out')
 
-        # Set properties
-        self.comp.interface = 'lo'
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-        self.comp.advanced_optimizations.buffer_size = 200000
-
         sink = sb.DataSink()
-
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
+        
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
         
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
-
         # Start components
         self.comp.start()
         sink.start()
-
-        # Wait for the attach
-        time.sleep(1)
 
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -497,7 +361,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             self.userver.send(p.encodedPacket)
 
         # Wait for data to be received
-        time.sleep(3)
+        time.sleep(1)
         
         # Get data
         data = sink.getData()
@@ -511,9 +375,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
 # Tests needed for 
     def testBufferSizeAdjustment(self):
-        
-        self.comp.interface = 'lo'
-        self.comp.attachment_override.enabled = True
+        self.setupComponent()
 
         buf_and_read = ((3300, 100), (2200, 1000), (500, 100), (800, 500))
 
@@ -526,8 +388,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             self.comp.stop()
 
     def testUdpBufferSize(self):
-        self.comp.interface = 'lo'
-        self.comp.attachment_override.enabled = True
+
+        self.setupComponent()
+        
         buffer_sizes = (1000, 2000, 3000, 4000, 5000, 6000)
         prev_buffer = 0
 
@@ -543,29 +406,16 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             self.comp.stop()
         
     def testSddsPacketsPerBulkIOPush(self):
-        # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataShortOut_out = self.comp.getPort('short_out')
-
-        # Set properties
-        self.comp.interface = 'lo'
+        self.setupComponent()
         
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
         sdds_pkts_per_push = (1, 2, 4, 8, 16, 32, 64)
-        self.comp.advanced_optimizations.buffer_size = 200000
 
         sink = sb.DataSink()
 
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-        
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
 
         for pkts_per_push in sdds_pkts_per_push:
             self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = pkts_per_push
@@ -600,30 +450,17 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         '''
         Push on TTV will send the packet out if the TTV flag changes
         '''
-        # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataShortOut_out = self.comp.getPort('short_out')
-
-        # Set properties
-        self.comp.interface = 'lo'
+        self.setupComponent(pkts_per_push=10)
         
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 10
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('short_out')
+        
         self.comp.advanced_configuration.push_on_ttv = True
 
         sink = sb.DataSink()
 
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-        
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
 
         # Start components
         self.comp.start()
@@ -661,31 +498,18 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         '''
         Wait on TTV will send nothing unless the pkt contains a TTV flag
         '''
+        self.setupComponent(pkts_per_push=10)
+        
         # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
         compDataShortOut_out = self.comp.getPort('short_out')
 
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 10
         self.comp.advanced_configuration.wait_on_ttv = True
 
         sink = sb.DataSink()
 
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
         
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
-        except:
-            attachId = ''
-
         # Start components
         self.comp.start()
         sink.start()
@@ -718,36 +542,17 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.stop()
         sink.stop()        
     
-    def testShortBigEndianess(self):
+    def testShortBigEndianness(self):
+        self.setupComponent(endianness=BIG_ENDIAN)
+        
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
         sink = sb.DataSink()
-
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
 
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
 
-        kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(52651, 'long'))]
-        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
-        compDataSddsIn.pushSRI(sri,timestamp.now())  
-           
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
-            
         # Start components
         self.comp.start()
         sink.start()
@@ -765,35 +570,17 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(self.comp.status.input_endianness, "4321", "Status property for endianness is not 4321")
         self.assertEqual(data, fakeData, "Big Endian short did not match expected")
 
-    def testShortLittleEndianess(self):
+    def testShortLittleEndianness(self):
+        self.setupComponent(endianness=LITTLE_ENDIAN)
+        
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
         sink = sb.DataSink()
 
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-
-        kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(43981, 'long'))]
-        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
-        compDataSddsIn.pushSRI(sri,timestamp.now())  
         
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
-            
         # Start components
         self.comp.start()
         sink.start()
@@ -816,25 +603,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
     
     def testTimeSlips(self):
+        self.setupComponent()
+        
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
 
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
-            
         # Start components
         self.comp.start()
 
@@ -898,24 +671,10 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(self.comp.status.time_slips, 2, "There should be one time slip from the jump time slip!")
     
     def testNewYear(self):
+        self.setupComponent()
+        
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
             
         # Start components
         self.comp.start()
@@ -948,33 +707,18 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
 
     def testNaughtyDevice(self):
+        self.setupComponent()
+        
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
-
         sink = sb.DataSink()
+        
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-        
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
             
         # Start components
         self.comp.start()
         sink.start()
-        
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -998,42 +742,22 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
                 pktNum = pktNum + 1
                 
             time_ns = time_ns + 512*xdelta_ns
-#             if (not recSRI and sink.sri() and sink.sri().streamID != 'defStream'):
-#                 print(str(sink.sri()))
-#                 recSRI = True
             
         self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
 
-
-
     def testBulkIOTiming(self):
+        self.setupComponent()
+        
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
         sink = sb.DataSink()
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
-        
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
             
         # Start components
         self.comp.start()
         sink.start()
-        
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -1079,35 +803,20 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
 
     def testUseBulkIOSRI(self):
+        
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
         sink = sb.DataSink()
-
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
 
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
         
         # Here we are using the BULKIO SRI with a modified xdelta and complex flag.
-        kw = [CF.DataType("BULKIO_SRI_PRIORITY", ossie.properties.to_tc_value(1, 'long'))]
+        kw=[CF.DataType("BULKIO_SRI_PRIORITY", ossie.properties.to_tc_value(1, 'long'))]
         sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.234e-9, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
-        compDataSddsIn.pushSRI(sri,timestamp.now())  
-           
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
-            
+        self.setupComponent(sri=sri)
+        
         # Start components
         self.comp.start()
         sink.start()
@@ -1134,31 +843,15 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
     def testMergeBulkIOSRI(self):
         # Get ports
         compDataShortOut_out = self.comp.getPort('short_out')
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
-        
-        self.comp.advanced_optimizations.buffer_size = 200000
-        self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = 1
 
         sink = sb.DataSink()
-
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
 
         # Connect components
         self.comp.connect(sink, providesPortName='shortIn')
         
         # Here we are using the BULKIO SRI with a modified xdelta and complex flag but the sdds xdelta and cx should merge in
         sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.234e-9, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='StreamID1234', blocking=False, keywords=[])
-        compDataSddsIn.pushSRI(sri,timestamp.now())  
-           
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
+        self.setupComponent(sri=sri)
             
         # Start components
         self.comp.start()
@@ -1182,25 +875,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
     def testSpeed(self):
         print "------------ This test is informational only and should never fail ----------------------"
-                # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
-
-        # Set properties
-        self.comp.interface = 'lo'
         
-        # Make it little endian so we do not have to run the bytewap
-        kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(43981, 'long'))]
-        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
-        compDataSddsIn.pushSRI(sri,timestamp.now())  
-        
-        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
-        attachId = ''
-
-        # Try to attach
-        try:
-            attachId = compDataSddsIn.attach(streamDef, 'test')
-        except:
-            attachId = ''
+        self.setupComponent(endianness=LITTLE_ENDIAN)
 
         target_speed = 1000000.0
         run = True
@@ -1213,7 +889,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         while (run):
             self.comp.start()
             
-            command = ["../cpp/utils/sddsShooter", self.uni_ip, str(self.port), str(target_speed), str(sleepTime)]
+            command = ["../cpp/test_utils/sddsShooter", self.uni_ip, str(self.port), str(target_speed), str(sleepTime)]
             p = subprocess.Popen(command, stdout=subprocess.PIPE)
             max_speed_acheived = float(p.stdout.readline())
             
@@ -1244,13 +920,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 # TODO: BULKIO priority
 
         
-    # Test #16
     # XXX: YLB Take a look at this again, it isnt actually checking any thing.
     def testUnicastAttachFail(self):
-        print '###################################################################'
-        print 'RUNNING TEST:',self.id()
-        print '\tNote: BULKIO.dataSDDS.AttachError is expected.'
-        print '###################################################################'
         
         # Get ports
         compDataSddsIn = self.comp.getPort('sdds_in')
@@ -1276,23 +947,21 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         time.sleep(1)
 
         # Double attach
-        # Can't catch with assertError. The program exits with an error message
-        # Try to attach
         try:
             attachId = compDataSddsIn.attach(streamDef, 'test') 
         except:
-            attachId = ''
+            attachId = 'shouldFail'
 
-        # Wait for the attach
-        time.sleep(1)
-
+        self.assertTrue(attachId == 'shouldFail', "Second attach on port should cause a failure!")
 
     def setUp(self):
+        print "\nRunning test:", self.id()
         ossie.utils.testing.ScaComponentTestCase.setUp(self)
 
         #Launch the component with the default execparams.
         execparams = self.getPropertySet(kinds = ("execparam",), modes = ("readwrite", "writeonly"), includeNil = False)
         execparams = dict([(x.id, any.from_any(x.value)) for x in execparams])
+        execparams["DEBUG_LEVEL"] = 0 # Disable logging, lots of the tests will cause WARN and error as we test conditions.
         self.launch(execparams)
 
         #Simulate regular component startup.

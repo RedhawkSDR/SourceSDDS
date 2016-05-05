@@ -20,6 +20,6 @@ AX_BOOST_BASE([1.41])
 AX_BOOST_SYSTEM
 AX_BOOST_THREAD
 AX_BOOST_REGEX
-AC_CONFIG_FILES([Makefile utils/Makefile])
+AC_CONFIG_FILES([Makefile test_utils/Makefile])
 AC_OUTPUT
 

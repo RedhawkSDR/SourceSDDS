@@ -13,9 +13,9 @@ cpp/configure
 cpp/depcomp
 cpp/install-sh
 cpp/missing
-cpp/utils/sddsShooter
-cpp/utils/Makefile
-cpp/utils/Makefile.in
+cpp/test_utils/sddsShooter
+cpp/test_utils/Makefile
+cpp/test_utils/Makefile.in
 tests/*.xml
 *.pyc
 *.deps

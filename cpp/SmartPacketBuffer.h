@@ -78,6 +78,7 @@ public:
 
 
     TypePtr pop_empty_buffer() {
+    	if (m_shuttingDown) {return NULL;}
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
     	m_no_empty_buffers.wait(lock, boost::bind(&SmartPacketBuffer<T>::empties_available, this));
     	if (m_shuttingDown) {return NULL;}
@@ -92,6 +93,8 @@ public:
      */
     template<typename Container>
     void pop_empty_buffers(Container &que, size_t len) {
+    		if (m_shuttingDown) {return;}
+
     		// Maybe they have what they want already
         	if (que.size() >= len)
         		return;
@@ -111,6 +114,7 @@ public:
         }
 
     void push_full_buffer(TypePtr b) {
+    	if (m_shuttingDown) {return;}
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
     	m_full_buffers.push_back(b);
     	lock.unlock();
@@ -123,6 +127,7 @@ public:
      */
     template<typename Container>
     void push_full_buffers(Container &que, size_t num) {
+    	if (m_shuttingDown) {return;}
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
 		m_full_buffers.insert(m_full_buffers.end(), que.begin(), que.begin() + num);
 		que.erase(que.begin(), que.begin() + num);
@@ -131,6 +136,7 @@ public:
     }
 
     TypePtr pop_full_buffer() {
+    	if (m_shuttingDown) {return NULL;}
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
 		m_no_full_buffers.wait(lock, boost::bind(&SmartPacketBuffer<T>::full_available, this));
 		if (m_shuttingDown) {return NULL;}
@@ -146,6 +152,7 @@ public:
      */
     template<typename Container>
     void pop_full_buffers(Container &que, size_t len) {
+    	if (m_shuttingDown) {return;}
 		// Maybe they have what they want already
     	if (que.size() >= len)
     		return;
@@ -163,6 +170,7 @@ public:
 	}
 
     void recycle_buffer(TypePtr b) {
+    	if (m_shuttingDown) {return;}
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
     	m_empty_buffers.push_back(b);
     	lock.unlock();
@@ -171,6 +179,7 @@ public:
 
     template<typename Container>
     void recycle_buffers(Container &que) {
+    	if (m_shuttingDown) {return;}
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
     	m_empty_buffers.insert(m_empty_buffers.end(), que.begin(), que.end());
     	que.clear();

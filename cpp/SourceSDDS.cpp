@@ -111,6 +111,7 @@ struct advanced_optimizations_struct SourceSDDS_i::get_advanced_optimizations_st
 	// Set to the struct version right now in case NOT_SET and then check to see if threads are up and get actuals
 	retVal.sdds_to_bulkio_thread_priority = advanced_optimizations.sdds_to_bulkio_thread_priority;
 	retVal.socket_read_thread_priority = advanced_optimizations.socket_read_thread_priority;
+	retVal.check_for_duplicate_sender = advanced_optimizations.check_for_duplicate_sender;
 
 	return retVal;
 }
@@ -176,6 +177,12 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
 	if (m_sddsToBulkIOThread) {
 		setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), request.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
 	}
+
+	if (not started()) {
+		advanced_optimizations.check_for_duplicate_sender = request.check_for_duplicate_sender;
+	} else if (advanced_optimizations.check_for_duplicate_sender != request.check_for_duplicate_sender) {
+		LOG_WARN(SourceSDDS_i, "Cannot change the check for single sender property while running");
+	}
 }
 
 void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartError) {
@@ -208,7 +215,7 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 		return;
 	}
 
-	m_socketReaderThread = new boost::thread(boost::bind(&SocketReader::run, boost::ref(m_socketReader), &m_pktbuffer));
+	m_socketReaderThread = new boost::thread(boost::bind(&SocketReader::run, boost::ref(m_socketReader), &m_pktbuffer, advanced_optimizations.check_for_duplicate_sender));
 
 	// Attempt to set the affinity of the socket reader thread if the user has told us to.
 	if (!advanced_optimizations.socket_read_thread_affinity.empty() && !(advanced_optimizations.socket_read_thread_affinity == "")) {

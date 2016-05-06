@@ -22,6 +22,7 @@ PREPARE_LOGGING(SocketReader)
 SocketReader::SocketReader(): m_shuttingDown(false), m_running(false), m_timeout(1), m_pkts_per_read(1), m_socket_buffer_size(-1) {
 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection));
 	memset(&m_unicast_connection, 0, sizeof(m_unicast_connection));
+	m_host_addr.s_addr = 0;
 }
 
 SocketReader::~SocketReader() {
@@ -100,7 +101,7 @@ size_t SocketReader::getSocketBufferSize() {
 /**
  * Called in a boost thread to get unused buffers from packet buffer, fill with packets, place back into buffer.
  */
-void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
+void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool confirmHosts) {
 	LOG_DEBUG(SocketReader, "Starting to run");
 	pthread_setname_np(pthread_self(), "SocketReader");
 	m_shuttingDown = false;
@@ -125,6 +126,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 
     struct mmsghdr msgs[m_pkts_per_read];
     struct iovec iovecs[m_pkts_per_read];
+	sockaddr_in source_addrs[m_pkts_per_read];
 
     if (m_socket_buffer_size) {
     	if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &m_socket_buffer_size, sizeof(m_socket_buffer_size)) != 0) {
@@ -145,6 +147,8 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 		iovecs[i].iov_base         = bufQue[i].get();
 		msgs[i].msg_hdr.msg_iov    = &iovecs[i];
 		msgs[i].msg_hdr.msg_iovlen = 1;
+		msgs[i].msg_hdr.msg_name = &source_addrs[i];
+		msgs[i].msg_hdr.msg_namelen = sizeof(sockaddr_in);
 	}
 
 	LOG_DEBUG(SocketReader, "Entering socket read while loop");
@@ -167,6 +171,12 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 			// Note that we've added pktsReadThisPass to the top of the bufQue so we only have to repoint the new buffers
 			for (i = 0; i < (size_t) pktsReadThisPass; ++i) {
 				iovecs[i].iov_base = bufQue[i].get();
+			}
+
+			// Its possible that you have two different hosts sending multicast to the same address. This feature was added to
+			// aid in debugging situations where you want to know who is missconfigured.
+			if (confirmHosts) {
+				confirmSingleHost(msgs, (size_t) pktsReadThisPass);
 			}
 			break;
 
@@ -209,4 +219,22 @@ bool SocketReader::setSocketBlockingEnabled(int fd, bool blocking)
    if (flags < 0) return false;
    flags = blocking ? (flags&~O_NONBLOCK) : (flags|O_NONBLOCK);
    return (fcntl(fd, F_SETFL, flags) == 0) ? true : false;
+}
+
+void SocketReader::confirmSingleHost(struct mmsghdr msgs[], size_t len) {
+
+	for (size_t i = 0; i < len; ++i) {
+		sockaddr_in * rcv_host_struct = reinterpret_cast<sockaddr_in *>(msgs[i].msg_hdr.msg_name);
+
+		if (rcv_host_struct->sin_addr.s_addr != m_host_addr.s_addr) {
+			if (m_host_addr.s_addr != 0) {
+				//XXX: Do not combine these into a single log statement. The inet_ntoa returns a pointer to an internal array containing the string so if you call it twice
+				// on the same line it will overwrite itself, display the same value twice in the log statement, and cause the developer debugging to question their sanity.
+				LOG_WARN(SocketReader, "Expected packets to come from: " << inet_ntoa(m_host_addr));
+				LOG_WARN(SocketReader, "Received packet from: " << inet_ntoa(rcv_host_struct->sin_addr));
+			}
+
+			m_host_addr = rcv_host_struct->sin_addr;
+		}
+	}
 }

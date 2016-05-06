@@ -39,6 +39,9 @@
     <simple id="advanced_optimizations::sdds_to_bulkio_thread_priority" name="sdds_to_bulkio_thread_priority" type="long">
       <value>-1</value>
     </simple>
+    <simple id="advanced_optimizations::check_for_duplicate_sender" name="check_for_duplicate_sender" type="boolean">
+      <value>false</value>
+    </simple>
     <configurationkind kindtype="property"/>
   </struct>
   <struct id="attachment_override" mode="readwrite">

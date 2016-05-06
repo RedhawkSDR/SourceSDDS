@@ -28,7 +28,7 @@ public:
 	SocketReader();
 	virtual ~SocketReader();
 
-    void run(SmartPacketBuffer<SDDSpacket> *pktbuffer);
+    void run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool confirmHosts);
     void shutDown();
     void setPktsPerRead(size_t pkts_per_read);
     size_t getPktsPerRead();
@@ -40,10 +40,13 @@ private:
     bool m_shuttingDown;
     bool m_running;
     int m_timeout;
+    struct in_addr m_host_addr;
     size_t m_pkts_per_read;
     size_t m_socket_buffer_size;
     multicast_t m_multicast_connection;
     unicast_t m_unicast_connection;
+    void confirmSingleHost(struct mmsghdr msgs[], size_t len);
+
 };
 
 #endif /* SOCKETREADER_H_ */

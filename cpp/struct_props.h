@@ -22,6 +22,7 @@ struct advanced_optimizations_struct {
         sdds_to_bulkio_thread_affinity = "";
         socket_read_thread_priority = -1;
         sdds_to_bulkio_thread_priority = -1;
+        check_for_duplicate_sender = false;
     };
 
     static std::string getId() {
@@ -36,6 +37,7 @@ struct advanced_optimizations_struct {
     std::string sdds_to_bulkio_thread_affinity;
     CORBA::Long socket_read_thread_priority;
     CORBA::Long sdds_to_bulkio_thread_priority;
+    bool check_for_duplicate_sender;
 };
 
 inline bool operator>>= (const CORBA::Any& a, advanced_optimizations_struct& s) {
@@ -66,6 +68,9 @@ inline bool operator>>= (const CORBA::Any& a, advanced_optimizations_struct& s) 
     if (props.contains("advanced_optimizations::sdds_to_bulkio_thread_priority")) {
         if (!(props["advanced_optimizations::sdds_to_bulkio_thread_priority"] >>= s.sdds_to_bulkio_thread_priority)) return false;
     }
+    if (props.contains("advanced_optimizations::check_for_duplicate_sender")) {
+        if (!(props["advanced_optimizations::check_for_duplicate_sender"] >>= s.check_for_duplicate_sender)) return false;
+    }
     return true;
 }
 
@@ -87,6 +92,8 @@ inline void operator<<= (CORBA::Any& a, const advanced_optimizations_struct& s) 
     props["advanced_optimizations::socket_read_thread_priority"] = s.socket_read_thread_priority;
  
     props["advanced_optimizations::sdds_to_bulkio_thread_priority"] = s.sdds_to_bulkio_thread_priority;
+ 
+    props["advanced_optimizations::check_for_duplicate_sender"] = s.check_for_duplicate_sender;
     a <<= props;
 }
 
@@ -106,6 +113,8 @@ inline bool operator== (const advanced_optimizations_struct& s1, const advanced_
     if (s1.socket_read_thread_priority!=s2.socket_read_thread_priority)
         return false;
     if (s1.sdds_to_bulkio_thread_priority!=s2.sdds_to_bulkio_thread_priority)
+        return false;
+    if (s1.check_for_duplicate_sender!=s2.check_for_duplicate_sender)
         return false;
     return true;
 }

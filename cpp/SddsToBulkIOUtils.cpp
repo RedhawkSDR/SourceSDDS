@@ -173,6 +173,8 @@ void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI
 		currSRI.ystart = upstreamSRI.ystart;
 		currSRI.ydelta = upstreamSRI.ydelta;
 		currSRI.yunits = upstreamSRI.yunits;
+		currSRI.blocking = upstreamSRI.blocking;
+		currSRI.subsize = upstreamSRI.subsize;
 
 		currSRI.keywords.length(upstreamSRI.keywords.length());
 

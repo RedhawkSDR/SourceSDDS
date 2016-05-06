@@ -23,6 +23,7 @@ import subprocess, signal, os
 
 LITTLE_ENDIAN=1234
 BIG_ENDIAN=4321
+DEBUG_LEVEL=0
 
 class UTC(datetime.tzinfo):
     """UTC"""
@@ -961,7 +962,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         #Launch the component with the default execparams.
         execparams = self.getPropertySet(kinds = ("execparam",), modes = ("readwrite", "writeonly"), includeNil = False)
         execparams = dict([(x.id, any.from_any(x.value)) for x in execparams])
-        execparams["DEBUG_LEVEL"] = 0 # Disable logging, lots of the tests will cause WARN and error as we test conditions.
+        execparams["DEBUG_LEVEL"] = DEBUG_LEVEL # Disable logging, lots of the tests will cause WARN and error as we test conditions.
         self.launch(execparams)
 
         #Simulate regular component startup.

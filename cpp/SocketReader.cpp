@@ -147,8 +147,11 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 		iovecs[i].iov_base         = bufQue[i].get();
 		msgs[i].msg_hdr.msg_iov    = &iovecs[i];
 		msgs[i].msg_hdr.msg_iovlen = 1;
-		msgs[i].msg_hdr.msg_name = &source_addrs[i];
-		msgs[i].msg_hdr.msg_namelen = sizeof(sockaddr_in);
+
+		if (confirmHosts) {
+			msgs[i].msg_hdr.msg_name = &source_addrs[i];
+			msgs[i].msg_hdr.msg_namelen = sizeof(sockaddr_in);
+		}
 	}
 
 	LOG_DEBUG(SocketReader, "Entering socket read while loop");

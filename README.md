@@ -5,11 +5,12 @@
 * [Description](#description)
 * [Design](#design)
 * [Properties](#properties)
+* [SRI](#sri)
 * [Unimplemented Optimizations](#unimplemented-optimizations)
 
 ## Description
 
-The rh.SourceSDDS will consume a single SDDS formatted multicast or unicast UDP stream and output it via the cooresponding bulkIO port. The component provides a number of status properties including buffer montioring of both kernel space socket and internal component buffers. Source IP and port information may either be expressed via the attachment override property or via the bulkIO SDDS ports attach call. See the [properties](#properties) section for details on how to configure the components advanced optimizations and the list of SRI keywords checked for within the component.
+The rh.SourceSDDS will consume a single SDDS formatted multicast or unicast UDP stream and output it via the cooresponding bulkIO port. The component provides a number of status properties including buffer montioring of both kernel space socket and internal component buffers. Source IP and port information may either be expressed via the attachment override property or via the bulkIO SDDS ports attach call. See the [properties](#properties) and [SRI](#sri) section for details on how to configure the components advanced optimizations and the list of SRI keywords checked for within the component.
 
 ## Design
 
@@ -33,7 +34,7 @@ Properties and their descriptions are below, struct props are shown with their s
 | socket_read_thread_affinity | Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which reads from the socket to only the specified CPUs. If externally set, this property will update to reflect the actual thread affinity|
 | sdds_to_bulkio_thread_affinity | Set using the same bitmask syntax (eg. FFFFFFFF) as taskset and limits the CPU affinity of the thread which consumes packets from the internal buffer, and makes the call to pushpacket|
 | socket_read_thread_priority | If set to non-zero, the scheduler type for the socket reader thread will be set to Round Robin and the priority set to the provided value using the pthread_setschedparam call. Note that rtprio privileges will need to be given to user running the component and that in most cases, this feature is not needed to keep up with data rates.|
-| bulkio_thread_priority | If set to non-zero, the scheduler type for the SDDS to BulkIO processor thread will be set to Round Robin and the priority set to the provided value using the pthread_setschedparam call. Note that rtprio privileges will need to be given to user running the component and that in most cases, this feature is not needed to keep up with data rates.|
+| sdds_to_bulkio_thread_priority | If set to non-zero, the scheduler type for the SDDS to BulkIO processor thread will be set to Round Robin and the priority set to the provided value using the pthread_setschedparam call. Note that rtprio privileges will need to be given to user running the component and that in most cases, this feature is not needed to keep up with data rates.|
 | check_for_duplicate_sender | If true, the source address of each SDDS packet will be checked and a warning printed if two different hosts are sending packets on the same multicast address. This is used primarily to debug the network configuration and can impact performance so is disabled by default.|
 
 **_attachment_override_** - Used in place of the SDDS Port to establish a multicast or unicast connection to a specific host and port. If enabled, this will overrule calls to attach however any SRI received from the attach port will be used.
@@ -75,6 +76,13 @@ Properties and their descriptions are below, struct props are shown with their s
 | input_stream_id | The stream id set via SRI. A default is used if no stream ID is passed via SRI.|
 | time_slips | The number of time slips which have occurred. A time slip could be either a single time slip event or an accumulated time slip. A single time slip event is defined as the SDDS timestamps between two SDDS packets exceeding a one sample delta. (eg. there was one sample time lag or lead between consecutive packets)  An accumulated time slip is defined as the absolute value of the time error accumulator exceeding 0.000001 seconds. The time error accumulator is a running total of the delta between the expected (1/sample_rate) and actual time stamps and should always hover around zero. |
 | num_packets_dropped_by_nic | Read from /sys/class/<interface>/statistics/rx_dropped, indicates the number of packets received by the network device but dropped, that are not forwarded to the upper layers for packet processing. This is NOT an indication of full buffers but instead a hint that something may be missconfigured as the NIC is receiving packets it does not know what to do with. See the network driver for the exact meaning of this value. |
+
+## SRI
+
+SRI can be fed into the SDDS port for the purpose of overriding the SDDS header, setting a stream ID, and passing along keywords. By default, the xdelta/sample rate is derived from the SDDS header. The sample rate supplied with the attach call is always ignored. Optionally, you may override the xdelta via keywords. Below is the list of keywords that are read by this component and its response.
+
+* BULKIO_SRI_PRIORITY or use_BULKIO_SRI or sddsPacketAlt - Used to override the xdelta and real/complex mode found in the SDDS Packet header in place of the xdelta and mode found in the supplied SRI.
+* dataRef or DATA_REF_STR - Used to set the endianness of the SDDS data portion. A string value of "43981" or "1234" will map to little endian while "52651" or "4321" will map to big endian.
 
 ## Unimplemented Optimizations
 

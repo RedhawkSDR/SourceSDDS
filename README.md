@@ -74,9 +74,9 @@ Properties and their descriptions are below, struct props are shown with their s
 | input_samplerate | The current samplerate, derived from either the SRI or the frequency field of the SDDS packet. The sample rate supplied by the attach call is ignored!|
 | input_stream_id | The stream id set via SRI. A default is used if no stream ID is passed via SRI.|
 | time_slips | The number of time slips which have occurred. A time slip could be either a single time slip event or an accumulated time slip. A single time slip event is defined as the SDDS timestamps between two SDDS packets exceeding a one sample delta. (eg. there was one sample time lag or lead between consecutive packets)  An accumulated time slip is defined as the absolute value of the time error accumulator exceeding 0.000001 seconds. The time error accumulator is a running total of the delta between the expected (1/sample_rate) and actual time stamps and should always hover around zero. |
+| num_packets_dropped_by_nic | Read from /sys/class/<interface>/statistics/rx_dropped, indicates the number of packets received by the network device but dropped, that are not forwarded to the upper layers for packet processing. This is NOT an indication of full buffers but instead a hint that something may be missconfigured as the NIC is receiving packets it does not know what to do with. See the network driver for the exact meaning of this value. |
 
 ## Unimplemented Optimizations
-
 
 This is a short list of additional optimizations which were considered but not implemented. Generally the reason for not implementing them was a choice of code simplicity / maintainability over increased performance. The current performance seems fast enough and I was hesitant to add the additional complexity if there was no driving factor. If in the future there is a driving factor behind increasing performance further, here is where I would start.
 

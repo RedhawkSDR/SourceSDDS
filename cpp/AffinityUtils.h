@@ -132,6 +132,10 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) 
 
 	/* Read the entire contents of /proc/net/udp into the buffer.  */
 	fp = fopen ("/proc/net/udp", "r");
+	if (fp == NULL) {
+		RH_NL_DEBUG("SourceSDDSUtils", "Failed to open /proc/net/udp");
+		return 0;
+	}
 	bytes_read = fread (buffer, 1, sizeof (buffer), fp);
 	fclose (fp);
 
@@ -185,6 +189,33 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) 
 	}
 
 	return rx_queue;
+}
+
+static int64_t get_rx_dropped(std::string interface) {
+	FILE* fp;
+	char buffer[1024];
+	size_t bytes_read;
+
+	std::stringstream ss;
+	ss << "/sys/class/net/" << interface << "/statistics/rx_dropped";
+
+	fp = fopen(ss.str().c_str(), "r");
+	if (!fp) {
+		RH_NL_DEBUG("SourceSDDSUtils", "Failed to open " << ss.str());
+		return -1;
+	}
+	bytes_read = fread(buffer, 1, sizeof (buffer), fp);
+	fclose (fp);
+
+	/* Bail if read failed or if buffer isn't big enough.  */
+	if (bytes_read == 0 || bytes_read == sizeof (buffer)) {
+	 return -1;
+	}
+
+	/* NUL-terminate the text.  */
+	buffer[bytes_read] = '\0';
+
+	return atol(buffer);
 }
 
 int setPolicyAndPriority(pthread_t thread, int priority, std::string thread_desc) {

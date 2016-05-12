@@ -82,6 +82,8 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 	retVal.input_endianness = m_sddsToBulkIO.getEndianness();
 	retVal.time_slips = m_sddsToBulkIO.getTimeSlips();
 
+	retVal.num_packets_dropped_by_nic = get_rx_dropped(interface);
+
 	return retVal;
 }
 

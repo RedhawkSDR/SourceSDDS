@@ -134,6 +134,9 @@
     <simple id="status::time_slips" name="time_slips" type="longlong">
       <value>0</value>
     </simple>
+    <simple id="status::num_packets_dropped_by_nic" name="num_packets_dropped_by_nic" type="long">
+      <value>0</value>
+    </simple>
     <configurationkind kindtype="property"/>
   </struct>
 </properties>

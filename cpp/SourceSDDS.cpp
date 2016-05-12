@@ -45,6 +45,8 @@ void SourceSDDS_i::newSriListener(const BULKIO::StreamSRI & newSri) {
 
 struct status_struct SourceSDDS_i::get_status_struct() {
 	struct status_struct retVal;
+	int num_listeners;
+
 	retVal.bits_per_sample = m_sddsToBulkIO.getBps();
 
 	float percent = 100*(float) m_pktbuffer.get_num_full_buffers() / (float) advanced_optimizations.buffer_size;
@@ -63,16 +65,18 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 
 	retVal.expected_sequence_number = m_sddsToBulkIO.getExpectedSequenceNumber();
 
-	// Not 100% sure why but the queue can actually get about 280 bytes larger than the set max. I guess linux gives 110% har har har (not actually 110%)
-	uint64_t rx_queue = get_rx_queue(attachment_override.ip_address, attachment_override.port);
-	percent = 100*(float) rx_queue / (float) m_socketReader.getSocketBufferSize();
-	ss << std::fixed << rx_queue << " / " << m_socketReader.getSocketBufferSize() << " (" << percent << "%)";
-	retVal.udp_socket_buffer_queue = ss.str();
-	ss.str("");
-
 	retVal.input_address = (attachment_override.enabled) ? attachment_override.ip_address:m_attach_stream.multicastAddress;
 	retVal.input_port = (attachment_override.enabled) ? attachment_override.port:m_attach_stream.port;
 	retVal.input_vlan = (attachment_override.enabled) ? attachment_override.vlan:m_attach_stream.vlan;
+
+	// Not 100% sure why but the queue can actually get about 280 bytes larger than the set max. I guess linux gives 110% har har har (not actually 110%)
+	uint64_t rx_queue = get_rx_queue(retVal.input_address, retVal.input_port, num_listeners);
+	percent = 100*(float) rx_queue / (float) m_socketReader.getSocketBufferSize();
+	ss << std::fixed << rx_queue << " / " << m_socketReader.getSocketBufferSize() << " (" << percent << "%)";
+	retVal.udp_socket_buffer_queue = ss.str();
+	retVal.num_udp_socket_readers = num_listeners;
+	ss.str("");
+
 	retVal.input_stream_id = m_sddsToBulkIO.getStreamId();
 	retVal.input_samplerate = m_sddsToBulkIO.getSampleRate();
 	retVal.input_endianness = m_sddsToBulkIO.getEndianness();

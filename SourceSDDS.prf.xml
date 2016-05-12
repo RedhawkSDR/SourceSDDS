@@ -106,6 +106,9 @@
     <simple id="status::udp_socket_buffer_queue" name="udp_socket_buffer_queue" type="string">
       <value></value>
     </simple>
+    <simple id="status::num_udp_socket_readers" name="num_udp_socket_readers" type="long">
+      <value>0</value>
+    </simple>
     <simple id="status::input_address" name="input_address" type="string">
       <value></value>
     </simple>

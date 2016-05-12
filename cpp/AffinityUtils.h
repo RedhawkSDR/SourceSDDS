@@ -109,7 +109,7 @@ std::string getAffinity(pthread_t thread) {
 	return stream.str();
 }
 
-static uint64_t get_rx_queue(std::string ip, uint16_t port) {
+static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) {
 	// Im not super happy with this but there doesnt seem to be any other API to get the current
 	// buffer "fullness" other than the proc file system....so we're file parsing in C++ to get a kernel
 	// value.
@@ -128,8 +128,9 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 	char tx_rx_queue[128];
 
 	uint64_t rx_queue = 0;
+	num_listeners = 0;
 
-	/* Read the entire contents of /proc/cpuinfo into the buffer.  */
+	/* Read the entire contents of /proc/net/udp into the buffer.  */
 	fp = fopen ("/proc/net/udp", "r");
 	bytes_read = fread (buffer, 1, sizeof (buffer), fp);
 	fclose (fp);
@@ -155,6 +156,7 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port) {
 	}
 
 	while (match) {
+		num_listeners++;
 		/* Parse the line to extract the tx_queue:rx_queue.  */
 		// 00000000:0801 00000000:0000 07 00000000:00000000
 		sscanf (match, "%s %s %s %s", &local_address[0], &rem_address[0], &st[0], &tx_rx_queue[0]);

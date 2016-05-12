@@ -257,6 +257,7 @@ struct status_struct {
         empty_buffers_available = "";
         buffers_to_work = "";
         udp_socket_buffer_queue = "";
+        num_udp_socket_readers = 0;
         input_address = "";
         input_port = 0;
         input_vlan = 0;
@@ -276,6 +277,7 @@ struct status_struct {
     std::string empty_buffers_available;
     std::string buffers_to_work;
     std::string udp_socket_buffer_queue;
+    CORBA::Long num_udp_socket_readers;
     std::string input_address;
     CORBA::Long input_port;
     CORBA::Long input_vlan;
@@ -306,6 +308,9 @@ inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
     }
     if (props.contains("status::udp_socket_buffer_queue")) {
         if (!(props["status::udp_socket_buffer_queue"] >>= s.udp_socket_buffer_queue)) return false;
+    }
+    if (props.contains("status::num_udp_socket_readers")) {
+        if (!(props["status::num_udp_socket_readers"] >>= s.num_udp_socket_readers)) return false;
     }
     if (props.contains("status::input_address")) {
         if (!(props["status::input_address"] >>= s.input_address)) return false;
@@ -346,6 +351,8 @@ inline void operator<<= (CORBA::Any& a, const status_struct& s) {
  
     props["status::udp_socket_buffer_queue"] = s.udp_socket_buffer_queue;
  
+    props["status::num_udp_socket_readers"] = s.num_udp_socket_readers;
+ 
     props["status::input_address"] = s.input_address;
  
     props["status::input_port"] = s.input_port;
@@ -374,6 +381,8 @@ inline bool operator== (const status_struct& s1, const status_struct& s2) {
     if (s1.buffers_to_work!=s2.buffers_to_work)
         return false;
     if (s1.udp_socket_buffer_queue!=s2.udp_socket_buffer_queue)
+        return false;
+    if (s1.num_udp_socket_readers!=s2.num_udp_socket_readers)
         return false;
     if (s1.input_address!=s2.input_address)
         return false;

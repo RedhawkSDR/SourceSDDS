@@ -216,6 +216,9 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 		if (m_wait_for_ttv && (pkt->get_ttv() == 0)) {
 			pktsToRecycle.push_back(pkt);
 			pkt_it = pktsToWork.erase(pkt_it);
+			if (m_bulkIO_data.size() > 0) {
+				pushPacket();
+			}
 			continue;
 		}
 

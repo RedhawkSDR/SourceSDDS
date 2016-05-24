@@ -48,7 +48,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
     def setupComponent(self, endianness=BIG_ENDIAN, pkts_per_push=1, sri=None):
         # Set properties
         self.comp.interface = 'lo'
-        compDataSddsIn = self.comp.getPort('sdds_in')
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
         self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = pkts_per_push
         
         if sri is None:        
@@ -116,9 +116,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.releaseObject()
 
     def testUnicastAttachSuccess(self):
-        """Attaches to the sdds_in port 10 times making sure that it occurs successfully each time"""
+        """Attaches to the dataSddsIn port 10 times making sure that it occurs successfully each time"""
         
-        compDataSddsIn = self.comp.getPort('sdds_in')
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
  
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         attachId = ''
@@ -186,7 +186,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataOctetOut_out = self.comp.getPort('octet_out')
+        compDataOctetOut_out = self.comp.getPort('dataOctetOut')
 
         # Set properties
         sink = sb.DataSink()
@@ -227,7 +227,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataFloatOut_out = self.comp.getPort('float_out')
+        compDataFloatOut_out = self.comp.getPort('dataFloatOut')
         
         sink = sb.DataSink()
  
@@ -268,7 +268,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
         sink = sb.DataSink()
 
         # Connect components
@@ -307,7 +307,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         sink = sb.DataSink()
 
@@ -340,7 +340,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         sink = sb.DataSink()
         
@@ -410,7 +410,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
         sdds_pkts_per_push = (1, 2, 4, 8, 16, 32, 64)
 
         sink = sb.DataSink()
@@ -454,7 +454,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent(pkts_per_push=10)
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
         
         self.comp.advanced_configuration.push_on_ttv = True
 
@@ -502,7 +502,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent(pkts_per_push=10)
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         self.comp.advanced_configuration.wait_on_ttv = True
 
@@ -547,7 +547,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent(endianness=BIG_ENDIAN)
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         sink = sb.DataSink()
 
@@ -575,7 +575,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent(endianness=LITTLE_ENDIAN)
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         sink = sb.DataSink()
 
@@ -607,7 +607,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         # Start components
         self.comp.start()
@@ -675,7 +675,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
             
         # Start components
         self.comp.start()
@@ -711,7 +711,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
         sink = sb.DataSink()
         
         # Connect components
@@ -750,7 +750,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.setupComponent()
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         sink = sb.DataSink()
         # Connect components
@@ -806,7 +806,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
     def testUseBulkIOSRI(self):
         
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         sink = sb.DataSink()
 
@@ -843,7 +843,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
     def testMergeBulkIOSRI(self):
         # Get ports
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         sink = sb.DataSink()
 
@@ -925,8 +925,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
     def testUnicastAttachFail(self):
         
         # Get ports
-        compDataSddsIn = self.comp.getPort('sdds_in')
-        compDataShortOut_out = self.comp.getPort('short_out')
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
         # Set properties
         self.comp.interface = 'lo'

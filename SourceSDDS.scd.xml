@@ -16,16 +16,16 @@
     <supportsinterface repid="IDL:CF/LogEventConsumer:1.0" supportsname="LogEventConsumer"/>
     <supportsinterface repid="IDL:CF/LogConfiguration:1.0" supportsname="LogConfiguration"/>
     <ports>
-      <provides repid="IDL:BULKIO/dataSDDS:1.0" providesname="sdds_in">
+      <provides repid="IDL:BULKIO/dataSDDS:1.0" providesname="dataSddsIn">
         <porttype type="data"/>
       </provides>
-      <uses repid="IDL:BULKIO/dataOctet:1.0" usesname="octet_out">
+      <uses repid="IDL:BULKIO/dataOctet:1.0" usesname="dataOctetOut">
         <porttype type="data"/>
       </uses>
-      <uses repid="IDL:BULKIO/dataShort:1.0" usesname="short_out">
+      <uses repid="IDL:BULKIO/dataShort:1.0" usesname="dataShortOut">
         <porttype type="data"/>
       </uses>
-      <uses repid="IDL:BULKIO/dataFloat:1.0" usesname="float_out"/>
+      <uses repid="IDL:BULKIO/dataFloat:1.0" usesname="dataFloatOut"/>
     </ports>
   </componentfeatures>
   <interfaces>

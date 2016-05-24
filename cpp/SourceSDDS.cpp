@@ -18,7 +18,7 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
     SourceSDDS_base(uuid, label),
 	m_socketReaderThread(NULL),
 	m_sddsToBulkIOThread(NULL),
-	m_sddsToBulkIO(octet_out, short_out, float_out)
+	m_sddsToBulkIO(dataOctetOut, dataShortOut, dataFloatOut)
 {
 	setPropertyQueryImpl(advanced_configuration, this, &SourceSDDS_i::get_advanced_configuration_struct);
 	setPropertyQueryImpl(advanced_optimizations, this, &SourceSDDS_i::get_advanced_optimizations_struct);
@@ -27,9 +27,9 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
 	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
 
-	sdds_in->setNewAttachDetachCallback(this);
-	sdds_in->setNewSriListener(this, &SourceSDDS_i::newSriListener);
-	sdds_in->setSriChangeListener(this, &SourceSDDS_i::newSriListener);
+	dataSddsIn->setNewAttachDetachCallback(this);
+	dataSddsIn->setNewSriListener(this, &SourceSDDS_i::newSriListener);
+	dataSddsIn->setSriChangeListener(this, &SourceSDDS_i::newSriListener);
 
 	m_attach_stream.attached = false;
 }

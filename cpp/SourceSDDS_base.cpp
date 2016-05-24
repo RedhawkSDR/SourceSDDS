@@ -16,26 +16,26 @@ SourceSDDS_base::SourceSDDS_base(const char *uuid, const char *label) :
 {
     loadProperties();
 
-    sdds_in = new bulkio::InSDDSPort("sdds_in");
-    addPort("sdds_in", sdds_in);
-    octet_out = new bulkio::OutOctetPort("octet_out");
-    addPort("octet_out", octet_out);
-    short_out = new bulkio::OutShortPort("short_out");
-    addPort("short_out", short_out);
-    float_out = new bulkio::OutFloatPort("float_out");
-    addPort("float_out", float_out);
+    dataSddsIn = new bulkio::InSDDSPort("dataSddsIn");
+    addPort("dataSddsIn", dataSddsIn);
+    dataOctetOut = new bulkio::OutOctetPort("dataOctetOut");
+    addPort("dataOctetOut", dataOctetOut);
+    dataShortOut = new bulkio::OutShortPort("dataShortOut");
+    addPort("dataShortOut", dataShortOut);
+    dataFloatOut = new bulkio::OutFloatPort("dataFloatOut");
+    addPort("dataFloatOut", dataFloatOut);
 }
 
 SourceSDDS_base::~SourceSDDS_base()
 {
-    delete sdds_in;
-    sdds_in = 0;
-    delete octet_out;
-    octet_out = 0;
-    delete short_out;
-    short_out = 0;
-    delete float_out;
-    float_out = 0;
+    delete dataSddsIn;
+    dataSddsIn = 0;
+    delete dataOctetOut;
+    dataOctetOut = 0;
+    delete dataShortOut;
+    dataShortOut = 0;
+    delete dataFloatOut;
+    dataFloatOut = 0;
 }
 
 /*******************************************************************************************

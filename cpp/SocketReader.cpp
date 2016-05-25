@@ -19,22 +19,38 @@
 
 PREPARE_LOGGING(SocketReader)
 
+/**
+ * Creates the socket reader with default options set. You must set the connection info prior to starting the run
+ * method.
+ */
 SocketReader::SocketReader(): m_shuttingDown(false), m_running(false), m_timeout(1), m_pkts_per_read(1), m_socket_buffer_size(-1) {
 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection));
 	memset(&m_unicast_connection, 0, sizeof(m_unicast_connection));
 	m_host_addr.s_addr = 0;
 }
 
+
+/**
+ * Calls the shutdown method and exits.
+ */
 SocketReader::~SocketReader() {
 	shutDown();
 }
 
+/**
+ * Sets the shut down boolean to true so that during the next pass
+ * the socket reader will close the socket and exit cleanly.
+ */
 void SocketReader::shutDown() {
 	LOG_DEBUG(SocketReader, "Shutting down the socket reader");
 	m_shuttingDown = true;
 	m_running = false;
 }
 
+/**
+ * Sets the maximum number of UDP packets read per socket read. This cannot be changed
+ * once the thread is up and running.
+ */
 void SocketReader::setPktsPerRead(size_t pkts_per_read) {
 	if (m_running) {
 		LOG_WARN(SocketReader, "Cannot change the packets per read while the socket reader thread is running");
@@ -43,10 +59,18 @@ void SocketReader::setPktsPerRead(size_t pkts_per_read) {
 	m_pkts_per_read = pkts_per_read;
 }
 
+/**
+ * Returns the maximum number of UDP packets read per socket read.
+ */
 size_t SocketReader::getPktsPerRead() {
 	return m_pkts_per_read;
 }
 
+/**
+ * Sets up and opens the socket based on the provided interfance, IP, vlan, and port. If there are issues
+ * setting up the socket a BadParameterError is thrown and the problem logged.
+ * This method cannot be called after the socket reader has started.
+ */
 void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint16_t vlan, uint16_t port) throw (BadParameterError) {
 	LOG_INFO(SocketReader, "Setting connection info to Interface: " << interface << " IP: " << ip << " Port: " << port);
 	if (m_running) {
@@ -90,16 +114,34 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 	}
 }
 
+/**
+ * Sets the target socket buffer size. Cannot be set while the socket reader is running.
+ * See the documentation for additional information.
+ */
 void SocketReader::setSocketBufferSize(int socket_buffer_size) {
+	if (m_running) {
+		LOG_WARN(SocketReader, "Cannot change the socket buffer size while the socket reader thread is running");
+		return;
+	}
 	m_socket_buffer_size = socket_buffer_size;
 }
 
+/**
+ * Returns the currently set socket buffer size. If the run method has been called,
+ * this value should reflect the actual buffer size, otherwise it reflects what the user
+ * has provided as the target buffer size. A value of zero indicates that the user has
+ * not provided a size and when run the system default will be used.
+ */
 size_t SocketReader::getSocketBufferSize() {
 	return m_socket_buffer_size;
 }
 
 /**
- * Called in a boost thread to get unused buffers from packet buffer, fill with packets, place back into buffer.
+ * This method should be called in its own thread as it will block until the shutDown method is called.
+ * Empty buffers will be pulled from the pktbuffer and filled with SDDS packets read from the previously setup socket.
+ * If confirmHosts is set, each received packet will be inspected to confirm they all came from the same host.
+ * Full packet buffers will be placed back into the pktbuffer's full buffer container for the SDDS to BulkIO
+ * processor to consume.
  */
 void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool confirmHosts) {
 	LOG_DEBUG(SocketReader, "Starting to run");
@@ -213,7 +255,11 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			memset(&m_unicast_connection, 0, sizeof(m_unicast_connection)); }
 }
 
-/** Returns true on success, or false if there was an error */
+/**
+ * Sets the provided file descriptor (assumed to be a socket)
+ * to be blocking or non-blocking based on provided blocking boolean.
+ * Returns true on success and false otherwise.
+ */
 bool SocketReader::setSocketBlockingEnabled(int fd, bool blocking)
 {
    if (fd < 0) return false;
@@ -224,6 +270,13 @@ bool SocketReader::setSocketBlockingEnabled(int fd, bool blocking)
    return (fcntl(fd, F_SETFL, flags) == 0) ? true : false;
 }
 
+/**
+ * Runs throught he list of received messages and confirms that they all came from
+ * the expected host address. The expected host address is initially empty and set
+ * on the first call to this method to the host address of the first packet received.
+ * In the event that we are receiving packets from multiple hosts, a warning is printed.
+ *
+ */
 void SocketReader::confirmSingleHost(struct mmsghdr msgs[], size_t len) {
 
 	for (size_t i = 0; i < len; ++i) {

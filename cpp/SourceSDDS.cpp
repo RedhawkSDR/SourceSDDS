@@ -14,6 +14,10 @@
 
 PREPARE_LOGGING(SourceSDDS_i)
 
+/**
+ * Constructor sets up callbacks for setters and getters of property structs,
+ * and the callbacks for attach/detach and SRI change listeners.
+ */
 SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
     SourceSDDS_base(uuid, label),
 	m_socketReaderThread(NULL),
@@ -34,15 +38,27 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 	m_attach_stream.attached = false;
 }
 
-SourceSDDS_i::~SourceSDDS_i()
-{
-}
+/**
+ * Nothing to tear down, data buffer is smart pointer based and will fall out of scope if
+ * not already cleaned up. REDHAWK framework should handle lifecycle and the stop call will
+ * close ports and cleanup.
+ */
+SourceSDDS_i::~SourceSDDS_i(){}
 
+/**
+ * Required method for the SDDS setNewSriListener API. Forwards the received SRI down to the SDDS to
+ * BulkIO class so that it can incorporate the SRI into the outputed BulkIO stream.
+ */
 void SourceSDDS_i::newSriListener(const BULKIO::StreamSRI & newSri) {
 	LOG_INFO(SourceSDDS_i, "Received new upstream SRI");
 	m_sddsToBulkIO.setUpstreamSri(newSri);
 }
 
+/**
+ * The getter used for the status_struct. This is registered in the constructor
+ * such that the REDHAWK framework will call this method rather than use the query API.
+ *
+ */
 struct status_struct SourceSDDS_i::get_status_struct() {
 	struct status_struct retVal;
 	int num_listeners;
@@ -87,6 +103,12 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 	return retVal;
 }
 
+/**
+ * The getter used for the advanced_configuration_struct. This is registered in the constructor
+ * such that the REDHAWK framework will call this method rather than use the query API.
+ * Both these values are kept track of in the sdds to bulkIO class and not within the local
+ * advanced configuration struct.
+ */
 struct advanced_configuration_struct SourceSDDS_i::get_advanced_configuration_struct() {
 	struct advanced_configuration_struct retVal;
 	retVal.push_on_ttv = m_sddsToBulkIO.getPushOnTTV();
@@ -94,10 +116,13 @@ struct advanced_configuration_struct SourceSDDS_i::get_advanced_configuration_st
 	return retVal;
 }
 
+/**
+ * The getter used for the advanced_optimizations_struct. This is registered in the constructor
+ * such that the REDHAWK framework will call this method rather than use the query API.
+ * Most of the variables are kept track of in their respective classes so the class struct
+ * may not be up to date.
+ */
 struct advanced_optimizations_struct SourceSDDS_i::get_advanced_optimizations_struct() {
-	// Most of the variables are kept track of in their respective classes
-	// The only ones kept track of in this class is the buffer_size and the affinity values.
-
 	struct advanced_optimizations_struct retVal;
 	retVal.buffer_size = advanced_optimizations.buffer_size;
 	retVal.pkts_per_socket_read = m_socketReader.getPktsPerRead();
@@ -114,7 +139,6 @@ struct advanced_optimizations_struct SourceSDDS_i::get_advanced_optimizations_st
 		getPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_priority, "socket reader thread");
 	}
 
-	// Set to the struct version right now in case NOT_SET and then check to see if threads are up and get actuals
 	retVal.sdds_to_bulkio_thread_priority = advanced_optimizations.sdds_to_bulkio_thread_priority;
 	retVal.socket_read_thread_priority = advanced_optimizations.socket_read_thread_priority;
 	retVal.check_for_duplicate_sender = advanced_optimizations.check_for_duplicate_sender;
@@ -122,11 +146,32 @@ struct advanced_optimizations_struct SourceSDDS_i::get_advanced_optimizations_st
 	return retVal;
 }
 
+/**
+ * The setter used for the advanced_configuration_struct. This is registered in the constructor
+ * such that the REDHAWK framework will call this method rather than use the configure API.
+ * Neither property can be changed if the component is running. This is likely overkill and could be changed.
+ */
 void SourceSDDS_i::set_advanced_configuration_struct(struct advanced_configuration_struct request) {
-	m_sddsToBulkIO.setPushOnTTV(request.push_on_ttv);
-	m_sddsToBulkIO.setWaitForTTV(request.wait_on_ttv);
+	if (started() && m_sddsToBulkIO.getPushOnTTV() != request.push_on_ttv) {
+		LOG_WARN(SourceSDDS_i, "Cannot set push on TTV while thread is running");
+	} else {
+		m_sddsToBulkIO.setPushOnTTV(request.push_on_ttv);
+	}
+
+	if (started() && m_sddsToBulkIO.getWaitOnTTV() != request.wait_on_ttv) {
+		LOG_WARN(SourceSDDS_i, "Cannot set wait on TTV while thread is running");
+	} else {
+		m_sddsToBulkIO.setWaitForTTV(request.wait_on_ttv);
+	}
 }
 
+/**
+ * The setter used for the advanced_optimizations_struct property. This is registered in the constructor
+ * such that the REDHAWK framework will call this method rather than use the configure API.
+ * Most properties cannot be changed while the component is running, however some can.
+ *
+ * @param request The requested values for the advanced_optimizations_struct
+ */
 void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimizations_struct request) {
 	if (started() && advanced_optimizations.buffer_size != request.buffer_size) {
 		LOG_WARN(SourceSDDS_i, "Cannot set the buffer size while the component is running");
@@ -191,11 +236,17 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
 	}
 }
 
+/**
+ * Initializes the internal buffers, which allocates memory, then starts both the Socket Reader thread and
+ * the SDDS to BulkIO processor thread.  If any errors occur during startup, a StartError is thrown.
+ * Thread affinity and priority is set here if the user has elected to set those properties.
+ */
 void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartError) {
 	if (started()) {
 		LOG_WARN(SourceSDDS_i, "Already started, call to start ignored.");
 		return;
 	}
+	std::stringstream errorText;
 
 	// This also destroys all of our buffers
 	destroyBuffersAndJoinThreads();
@@ -207,18 +258,17 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	// Setup the socketReader
 	//////////////////////////////////////////
 	if (not m_attach_stream.attached && not attachment_override.enabled) {
-		LOG_ERROR(SourceSDDS_i, "Cannot setup the socket reader without either a successful attach or attachment override set");
-		return;
+		errorText << "Cannot setup the socket reader without either a successful attach or attachment override set";
+		LOG_ERROR(SourceSDDS_i, errorText.str());
+		throw CF::Resource::StartError(CF::CF_EINVAL, errorText.str().c_str());
 	}
 
 	try {
 		setupSocketReaderOptions();
 	} catch (BadParameterError &e) {
-		std::stringstream ss;
-		ss << "Failed to setup socket reader options: " << e.what();
-		LOG_ERROR(SourceSDDS_i, ss.str());
-		throw CF::Resource::StartError(CF::CF_EINVAL, ss.str().c_str());
-		return;
+		errorText << "Failed to setup socket reader options: " << e.what();
+		LOG_ERROR(SourceSDDS_i, errorText.str());
+		throw CF::Resource::StartError(CF::CF_EINVAL, errorText.str().c_str());
 	}
 
 	m_socketReaderThread = new boost::thread(boost::bind(&SocketReader::run, boost::ref(m_socketReader), &m_pktbuffer, advanced_optimizations.check_for_duplicate_sender));
@@ -249,6 +299,10 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	SourceSDDS_base::start();
 }
 
+/**
+ * Will stop the component and join the Socket Reader and SDDS to BulkIO processor threads.
+ * Overridden from the Component API stop but calls the base class stop method as well.
+ */
 void SourceSDDS_i::stop () throw (CF::Resource::StopError, CORBA::SystemException) {
 	LOG_DEBUG(SourceSDDS_i, "Stop Called cleaning up");
 	destroyBuffersAndJoinThreads();
@@ -259,7 +313,9 @@ void SourceSDDS_i::stop () throw (CF::Resource::StopError, CORBA::SystemExceptio
 
 /**
  * Sets the IP and port on the class socket reader from either the SDDS port or the properties depending on
- * override settings.
+ * override settings. If there is an issue with setting up the network parameters a Bad Parameter Error is thrown
+ *
+ * @throws BadParameterError is thrown by the underlying setConnectionInfo call in the socketReader class for a number of reasons
  */
 void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
 	if (attachment_override.enabled) {
@@ -270,6 +326,18 @@ void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
 	m_socketReader.setPktsPerRead(advanced_optimizations.pkts_per_socket_read);
 }
 
+/**
+ * Required method by the Attach Detach Callback API. Used to set the SDDS stream parameters in place of using
+ * the attachment_override struct. Note that the supplied stream sample rate IS NOT USED. The sample
+ * rate is retrieved directly from the SDDS header or from the provided SRI if the proper keywords
+ * are used. (See the relevant documentation for details) If the component had been started and running
+ * from an attachment_override value then the componet will stop, setup the new stream, and restart.
+ *
+ * @param stream A struct containing the stream definition including network parameters and stream ID. Note that the sample rate is NOT USED!
+ * @param userid Used only to log who has made the attach called. This value is not used for anything other than logging.
+ * @return The attachId which will either be the supplied Stream ID or a unique identifier if no stream ID is provided. This is used during the detach call.
+ *
+ */
 char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const char* userid) throw (BULKIO::dataSDDS::AttachError, BULKIO::dataSDDS::StreamInputError) {
 	LOG_INFO(SourceSDDS_i, "Attach called by: " << userid);
 	if (m_attach_stream.attached) {
@@ -303,6 +371,16 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 	return CORBA::string_dup(m_attach_stream.id.c_str());
 }
 
+/**
+ * Required method by the Attach Detach Callback API. Used to remove an attached SDDS stream.
+ * Throws a detach error if there is no stream which matches the attachId given.
+ * If the component is running during a valid detach, the component will stop, detach, and attempt to
+ * restart. The detach call will also have affect of unsetting any upstream SRI from the SDDS to
+ * BulkIO class.
+ *
+ * @param attachId The unique attach ID which was returned during the matching attach call.
+ * @throws DetachError If detach is called on a stream that is not currently attached / active.
+ */
 void SourceSDDS_i::detach(const char* attachId) {
 
 	if (attachId != m_attach_stream.id) {
@@ -325,6 +403,11 @@ void SourceSDDS_i::detach(const char* attachId) {
 	}
 }
 
+/**
+ * Sets the packets per read, push on ttv, wait on ttv, and data endianness options
+ * of the SDDS to BulkIO processor based on the values set in the advanced optimization,
+ * advanced configuration, and attachment override structs.
+ */
 void SourceSDDS_i::setupSddsToBulkIOOptions() {
 	m_sddsToBulkIO.setPktsPerRead(advanced_optimizations.sdds_pkts_per_bulkio_push);
 	advanced_optimizations.sdds_pkts_per_bulkio_push = m_sddsToBulkIO.getPktsPerRead();
@@ -335,15 +418,18 @@ void SourceSDDS_i::setupSddsToBulkIOOptions() {
 		m_sddsToBulkIO.setEndianness(attachment_override.endianness);
 	}
 }
+
+/**
+ * Not used.
+ */
 void SourceSDDS_i::constructor()
 {
-    /***********************************************************************************
-     This is the RH constructor. All properties are properly initialized before this function is called
-    ***********************************************************************************/
 }
 
 /**
- * Stops the socket reader thread and the SDDS to Bulkio worker threads
+ * Stops the socket reader thread and the SDDS to Bulkio worker threads.
+ * After this call the socket will be closed, all memory used by the internal
+ * buffer will be freed and any buffered BulkIO packets will be pushed.
  */
 void SourceSDDS_i::destroyBuffersAndJoinThreads() {
 
@@ -380,6 +466,13 @@ void SourceSDDS_i::destroyBuffersAndJoinThreads() {
 	LOG_DEBUG(SourceSDDS_i, "Everything should be shutdown and joined");
 }
 
+/**
+ * This component does not use the standard service function and instead simply returns FINISH.
+ * The processing occurs in the socket reader and the SDDS to BulkIO processing threads which
+ * are kicked off in the start method.
+ *
+ * @return Will always return the FINISH (-1) constant.
+ */
 int SourceSDDS_i::serviceFunction()
 {
     LOG_DEBUG(SourceSDDS_i, "Component has no service function, returning FINISHED");

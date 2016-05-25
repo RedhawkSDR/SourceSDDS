@@ -13,7 +13,13 @@ PREPARE_LOGGING(SddsToBulkIOProcessor)
 
 //TODO: Should accum_error_tolerance be a setable property?  Should we report it back?
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
-	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false), m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0), m_last_sdds_time(0), m_pkts_dropped(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out), m_float_out(float_out), m_upstream_sri_set(false), m_endianness(ENDIANNESS::ENDIAN_DEFAULT), m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0), m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0), m_accum_error_tolerance(0.000001),m_non_conforming_device(false)
+	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false),
+	m_push_on_ttv(false), m_first_packet(true), m_current_ttv_flag(false),m_expected_seq_number(0),
+	m_last_sdds_time(0), m_pkts_dropped(0), m_bps(0), m_octet_out(octet_out), m_short_out(short_out),
+	m_float_out(float_out), m_upstream_sri_set(false), m_endianness(ENDIANNESS::ENDIAN_DEFAULT),
+	m_new_upstream_sri(false), m_use_upstream_sri(false), m_num_time_slips(0), m_current_sample_rate(0),
+	m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0),
+	m_accum_error_tolerance(0.000001),m_non_conforming_device(false)
 {
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
@@ -28,6 +34,11 @@ SddsToBulkIOProcessor::~SddsToBulkIOProcessor() {
 	shutDown();
 }
 
+/**
+ * Sets the number of SDDS packets to read off of the smart packet buffer queue.
+ * This also maps to the target number of SDDS packets pushed via the pushPacket call.
+ * See the documentation for details.
+ */
 void SddsToBulkIOProcessor::setPktsPerRead(size_t pkts_per_read) {
 	if (m_running) {
 		LOG_WARN(SddsToBulkIOProcessor, "Cannot set packets per read while thread is running");
@@ -49,29 +60,47 @@ size_t SddsToBulkIOProcessor::getPktsPerRead() {
 	return m_pkts_per_read;
 }
 
+/**
+ * Sets the shut down boolean to true so that during the next pass
+ * the SDDS to BulkIO processor will exit cleanly. Any currently
+ * buffered data will be pushed out the BulkIO port.
+ */
 void SddsToBulkIOProcessor::shutDown() {
 	LOG_DEBUG(SddsToBulkIOProcessor, "Shutting down the packet processor");
 	m_shuttingDown = true;
 	m_running = false;
 }
 
+/**
+ * Sets the wait on TTV option, see the documentation for details.
+ * Cannot be called while the run method is active.
+ */
 void SddsToBulkIOProcessor::setWaitForTTV(bool wait_for_ttv) {
 	if (m_running) {
-		LOG_WARN(SddsToBulkIOProcessor, "Cannot set packets per read while thread is running");
+		LOG_WARN(SddsToBulkIOProcessor, "Cannot set wait on TTV while thread is running");
 		return;
 	}
 	m_wait_for_ttv = wait_for_ttv;
 }
 
+/**
+ * Sets the push on TTV option, see the documentation for details.
+ * Cannot be called while the run method is active.
+ */
 void SddsToBulkIOProcessor::setPushOnTTV(bool push_on_ttv) {
 	if (m_running) {
-		LOG_WARN(SddsToBulkIOProcessor, "Cannot set packets per read while thread is running");
+		LOG_WARN(SddsToBulkIOProcessor, "Cannot set push on TTV while thread is running");
 		return;
 	}
 
 	m_push_on_ttv = push_on_ttv;
 }
 
+/**
+ * This is the entry point to the processing thread. The provided pktbuffer will be
+ * used to pull full packets from, processed via the processPackets call, then the processed
+ * packets will be recycled. This method does not return until the shutdown method is called.
+ */
 void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_running = true;
 	m_shuttingDown = false;
@@ -92,6 +121,10 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 		pktbuffer->recycle_buffers(pktsToRecycle);
 	}
 
+	if (m_bulkIO_data.size() > 0) {
+		pushPacket();
+	}
+
 	// Shutting down, recycle all the packets
 	pktbuffer->recycle_buffers(pktsToProcess);
 	pktbuffer->recycle_buffers(pktsToRecycle);
@@ -100,6 +133,11 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_first_packet = true;
 }
 
+/**
+ * Calculates the expected xdelta based on the provided rate, complex flag, and current m_bps.
+ * The member variables max, ideal, and min time steps are updated which are used to deteremine
+ * if a time slip has occured.
+ */
 void SddsToBulkIOProcessor::updateExpectedXdelta(double rate, bool complex) {
 	// Update our current sample rate and last times
 	m_current_sample_rate = rate;
@@ -147,6 +185,13 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 	return true;
 }
 
+/**
+ * Checks the provided packet to see if a time slip has occured. This can either be a time
+ * discontinuity between subsequent packets or a slow time slip over a number of packets by
+ * calculating the accumulated time slip. See the documentation for details.
+ * There is also a check, and adjustments for poorly behaving devices which may not abide by the SDDS standard (such as the MSDD)
+ * see the note below for details.
+ */
 void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 	// If time tag is not valid no need to check for time slips.
 	bool slip = false;
@@ -294,6 +339,9 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 	}
 }
 
+/**
+ * Pushes the current SRI to the appropriate port based on m_bps.
+ */
 void SddsToBulkIOProcessor::pushSri() {
 	LOG_DEBUG(SddsToBulkIOProcessor, "Pushing SRI");
 	switch(m_bps) {
@@ -365,27 +413,57 @@ void SddsToBulkIOProcessor::pushPacket() {
 
 	m_bulkIO_data.clear();
 }
-
+/**
+ * Returns whether the processor is set to push on a time tag valid flag change.
+ * See the documentation for details.
+ */
 bool SddsToBulkIOProcessor::getPushOnTTV() {
 	return m_push_on_ttv;
 }
 
+/**
+ * Returns whether the processor is set to wait on a time tag valid flag.
+ * See the documentation for details.
+ */
 bool SddsToBulkIOProcessor::getWaitOnTTV() {
 	return m_wait_for_ttv;
 }
 
+/**
+ * Returns the number of bits per sample which is pulled directly from the SDDS packet header
+ * except for when the value in the header is 31 in which case it represents 32 bits and just
+ * doesn't have the resolution to represent 32.
+ */
 unsigned short SddsToBulkIOProcessor::getBps() {
 	return m_bps;
 }
 
+/**
+ * The number of lost SDDS packets. For simplicity, the calculation includes the
+ * optional checksum packets in the lost SDDS packet count (sent every 32 packets)
+ * so it may not reflect the exact number of dropped packets if checksum packets are not used (and they never are).
+ */
 unsigned long long SddsToBulkIOProcessor::getNumDropped() {
 	return m_pkts_dropped;
 }
 
+/**
+ * Returns the expected SDDS sequence number. This processor assumes that
+ * the checksum packet will never be sent.
+ */
 uint16_t SddsToBulkIOProcessor::getExpectedSequenceNumber() {
 	return m_expected_seq_number;
 }
 
+/**
+ * Replaces any existing SRI with the provided SRI object and flags the processor
+ * to merge this new SRI in with the current SRI object during the next SDDS packet processed.
+ * If the SRI has changed, it will cause a push packet such that the next BulkIO push has the new
+ * SRI associated. This method causes a lock to be aquired since it is likely called
+ * from outside of the processing thread.
+ *
+ * @param upstream_sri The SRI object which will now be mapped to this stream.
+ */
 void SddsToBulkIOProcessor::setUpstreamSri(BULKIO::StreamSRI upstream_sri) {
 	boost::unique_lock<boost::mutex> lock(m_upstream_sri_lock);
 	m_upstream_sri = upstream_sri;
@@ -393,6 +471,12 @@ void SddsToBulkIOProcessor::setUpstreamSri(BULKIO::StreamSRI upstream_sri) {
 	m_new_upstream_sri = true;
 }
 
+/**
+ * Flags the processor loop to not use the upstream SRI. This will
+ * also reset the endianness back to the default (Network Byte Order)
+ * This method causes a lock to be aquired since it is likely called
+ * from outside of the processing thread.
+ */
 void SddsToBulkIOProcessor::unsetUpstreamSri() {
 	boost::unique_lock<boost::mutex> lock(m_upstream_sri_lock);
 	m_use_upstream_sri = false;
@@ -400,18 +484,38 @@ void SddsToBulkIOProcessor::unsetUpstreamSri() {
 	m_endianness = ENDIANNESS::ENDIAN_DEFAULT; // Default to big endian
 }
 
+/**
+ * Returns the current stream ID which is derived from
+ * the upstream SRI or created if none is provided.
+ */
 std::string SddsToBulkIOProcessor::getStreamId() {
 	return CORBA::string_dup(m_sri.streamID);
 }
 
+/**
+ * Returns the SDDS sample rate. The sample rate can be found in either
+ * the SDDS header, or the upstream SRI if the upstream SRI is being used.
+ * See the documentation for details on how to set and use the upstream SRI
+ * in place of the SDDS header value.
+ */
 double SddsToBulkIOProcessor::getSampleRate() {
 	return m_current_sample_rate;
 }
 
+/**
+ * Returns the currently set assumed engianness of the
+ * data portion of the SDDS packet. Valid strings are
+ * definied in the header file.
+ */
 std::string SddsToBulkIOProcessor::getEndianness() {
 	return m_endianness;
 }
 
+/**
+ * Sets the expected endianness of the data portion of the SDDS packet.
+ * Cannot be called while the processor is running. Acceptable values are
+ * defined in the header file. Unknown values will be logged and ignored.
+ */
 void SddsToBulkIOProcessor::setEndianness(std::string endianness) {
 	if (m_running) {
 		LOG_ERROR(SddsToBulkIOProcessor, "Cannot change endianness while running.");
@@ -426,6 +530,11 @@ void SddsToBulkIOProcessor::setEndianness(std::string endianness) {
 	m_endianness = endianness;
 }
 
+/**
+ * Returns the total number of timeslips where a time slip
+ * can either be an accumulated time slip or a time slip between
+ * packets. See the documentation for more details.
+ */
 long SddsToBulkIOProcessor::getTimeSlips() {
 	return m_num_time_slips;
 }

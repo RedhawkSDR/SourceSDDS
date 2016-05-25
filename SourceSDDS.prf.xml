@@ -102,7 +102,7 @@
       <value>0</value>
     </simple>
     <simple id="status::dropped_packets" name="dropped_packets" type="ulong">
-      <description>The number of lost SDDS packets. For simplicity, the calculation includes the optional checksum packets in the lost SDDS packet count (sent every 31 packets) so it may not reflect the exact number of dropped packets if checksum packets are not used (and they never are).</description>
+      <description>The number of lost SDDS packets. For simplicity, the calculation includes the optional checksum packets in the lost SDDS packet count (sent every 32 packets) so it may not reflect the exact number of dropped packets if checksum packets are not used (and they never are).</description>
       <value>0</value>
     </simple>
     <simple id="status::bits_per_sample" name="bits_per_sample" type="ushort">

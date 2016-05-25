@@ -47,6 +47,15 @@ public:
 
     explicit SmartPacketBuffer():m_shuttingDown(false) {}
 
+    /**
+     * Initializes the empty buffers container with capacity
+     * new Boost shared pointers of the templated type provided.
+     * If this Smart Packet Buffer was previously initialized,
+     * one should call destroy buffers before the call to initialize.
+     * Only the empty buffer container is cleared prior to initialization.
+     *
+     * @param capacity The size of the emtpy buffers container after initialization
+     */
     void initialize(size_type capacity) {
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
     	size_t i;
@@ -60,6 +69,14 @@ public:
     	lock.unlock();
     }
 
+    /**
+     * Notifies any waiting thread that the packet buffer is shutting down and
+     * frees all the memory that the smart buffer currently is keeping track of.
+     * This does not include any buffers currently held by other threads which
+     * would need to be recycled or returned prior to calling destroyBuffers.
+     * There is no harm in calling destroyBuffers more than once if one needs
+     * to free the thread holding the data to recycle it.
+     */
     void destroyBuffers() {
     	m_shuttingDown = true;
     	m_no_empty_buffers.notify_all();
@@ -77,6 +94,11 @@ public:
     }
 
 
+    /**
+     * Pops a single empty buffer off of the empty buffer container. Will block
+     * if no empty buffers are available.
+     * NOTE: Not as well tested as pop_empty_buffers but included for completness.
+     */
     TypePtr pop_empty_buffer() {
     	if (m_shuttingDown) {return NULL;}
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
@@ -90,6 +112,7 @@ public:
 
     /**
      * Fill the provided container until it is len in size of empty buffers.
+     * Will block until the request can be satisified (ie. there are len buffers available)
      */
     template<typename Container>
     void pop_empty_buffers(Container &que, size_t len) {
@@ -113,6 +136,11 @@ public:
         	lock.unlock();
         }
 
+    /**
+     * Pushes a single full buffer on to the full buffer container. Will block
+     * if anther thread has the full buffer container lock.
+     * NOTE: Not as well tested as push_full_buffers but included for completness.
+     */
     void push_full_buffer(TypePtr b) {
     	if (m_shuttingDown) {return;}
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
@@ -122,8 +150,8 @@ public:
     }
 
     /**
-     * Pushes all the buffers contained in provided container onto the full buffer deque
-     * and clears the given container.
+     * Pushes all the buffers contained in provided container onto the internal full buffer container
+     * and clears the povided container. Will block if another thread has the full buffer lock.
      */
     template<typename Container>
     void push_full_buffers(Container &que, size_t num) {
@@ -135,6 +163,10 @@ public:
 		m_no_full_buffers.notify_one();
     }
 
+    /**
+     * Returns a single full buffer. Will block if a full buffer is not available.
+     * NOTE: Not as well tested as pop_full_buffers but included for completness.
+     */
     TypePtr pop_full_buffer() {
     	if (m_shuttingDown) {return NULL;}
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
@@ -149,6 +181,7 @@ public:
 
     /**
      * Fill the provided container until it is len in size of full buffers.
+     * Will block until len buffers are available.
      */
     template<typename Container>
     void pop_full_buffers(Container &que, size_t len) {
@@ -169,6 +202,11 @@ public:
 		lock.unlock();
 	}
 
+    /**
+     * Returns a single buffer to the internal empty buffer container.
+     * Will block if a nother thread holds the empty buffer lock.
+     * NOTE: Not as well tested as recycle_buffers but included for completness.
+     */
     void recycle_buffer(TypePtr b) {
     	if (m_shuttingDown) {return;}
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
@@ -177,6 +215,10 @@ public:
     	m_no_empty_buffers.notify_one();
     }
 
+    /**
+     * Returns all buffers in provided que container to the internal empty buffer container.
+     * Will block if another thread holds the empty buffer lock.
+     */
     template<typename Container>
     void recycle_buffers(Container &que) {
     	if (m_shuttingDown) {return;}
@@ -187,10 +229,16 @@ public:
     	m_no_empty_buffers.notify_one();
     }
 
+    /**
+     * Returns the number of buffers in the internal full buffers container.
+     */
     size_t get_num_full_buffers() {
     	return m_full_buffers.size();
     }
 
+    /**
+     * Returns the number of buffers in the internal empty buffers container.
+     */
     size_t get_num_empty_buffers() {
     	return m_empty_buffers.size();
     }

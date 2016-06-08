@@ -304,6 +304,8 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			if (sriChanged) {
 				pushPacket();
 				pushSri();
+				updateExpectedXdelta(m_non_conforming_device ? pkt->get_rate() * 2 : pkt->get_rate(), pkt->cx != 0);
+				m_last_sdds_time = 0;
 				return; // Refill our packets
 			}
 

@@ -262,7 +262,48 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         sink.stop()
         
+    def testXDeltaChange(self):
+        self.setupComponent()
+        
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
 
+        sink = sb.DataSink()
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+            
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        pktNum = 0
+        
+        sr=1e6
+        xdelta_ns=int(1/(sr) * 1e9)
+        time_ns=0
+        
+        # No time slips here
+        while pktNum < 100:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4), CX=1)
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ns = time_ns + 512*xdelta_ns
+            if pktNum > 50:
+                sr=1e6*4
+                xdelta_ns=int(1/(sr) * 1e9)
+            
+        time.sleep(0.5)
+        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips! However %s reported" % self.comp.status.time_slips)
+        
     def testUnicastShortPort(self):
 
         self.setupComponent()
@@ -374,7 +415,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         sink.stop()
 
 
-# Tests needed for 
     def testBufferSizeAdjustment(self):
         self.setupComponent()
 
@@ -897,6 +937,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if (max_speed_acheived / target_speed < target_threshold):
                 print "Sdds Shooter could not achieve the target speed of %s Mbps, max it could shoot was %s Mbps" % (str(8*target_speed/1024/1024), str(8*max_speed_acheived/1024/1024))
                 run = False
+                continue
             
             if self.comp.status.dropped_packets == last_num_dropped:
                 target_speed = target_speed * speed_bump
@@ -905,6 +946,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
                 last_num_dropped = self.comp.status.dropped_packets
                 target_speed = target_speed / speed_bump # Resets us back to our previous speed. 
                 speed_bump = speed_bump / 2
+                print 'dropped packets'
                 run = False
                 
             if speed_bump < 1.1:
@@ -912,7 +954,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             
             self.comp.stop()
             
-        print "Final speed hit: %s Mbps" % str(8*top_speed/1024/1024)
+        print "Final successful speed hit: %s Mbps" % str(8*top_speed/1024/1024)
             
         
 # TODO: Socket Reader Thread affinity

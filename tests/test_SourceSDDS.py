@@ -25,6 +25,12 @@ LITTLE_ENDIAN=1234
 BIG_ENDIAN=4321
 DEBUG_LEVEL=0
 
+# TODO: Add unit test for all the different start types eg. 
+# - Started with no attach or override then attachment override set true
+# - Started with no attach or override then attach comes in
+# - Started with attachment override then attachment override occurs etc.
+
+
 class UTC(datetime.tzinfo):
     """UTC"""
 

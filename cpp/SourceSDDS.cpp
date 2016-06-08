@@ -246,22 +246,29 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 		LOG_WARN(SourceSDDS_i, "Already started, call to start ignored.");
 		return;
 	}
-	std::stringstream errorText;
-
-	// This also destroys all of our buffers
-	destroyBuffersAndJoinThreads();
-
-	// Initialize our buffer of packets
-	m_pktbuffer.initialize(advanced_optimizations.buffer_size);
 
 	//////////////////////////////////////////
 	// Setup the socketReader
 	//////////////////////////////////////////
 	if (not m_attach_stream.attached && not attachment_override.enabled) {
-		errorText << "Cannot setup the socket reader without either a successful attach or attachment override set";
-		LOG_ERROR(SourceSDDS_i, errorText.str());
-		throw CF::Resource::StartError(CF::CF_EINVAL, errorText.str().c_str());
+		LOG_INFO(SourceSDDS_i, "Cannot setup the socket reader without either a successful attach or attachment override set. "
+				"Component will start but will be in a holding pattern until attach override set or attach call made.");
+	} else {
+		_start();
 	}
+
+	// Call the parent start
+	SourceSDDS_base::start();
+}
+
+void SourceSDDS_i::_start() throw (CF::Resource::StartError) {
+
+	std::stringstream errorText;
+	// This also destroys all of our buffers
+	destroyBuffersAndJoinThreads();
+
+	// Initialize our buffer of packets
+	m_pktbuffer.initialize(advanced_optimizations.buffer_size);
 
 	try {
 		setupSocketReaderOptions();
@@ -295,8 +302,6 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	advanced_optimizations.sdds_to_bulkio_thread_affinity = getAffinity(m_sddsToBulkIOThread->native_handle());
 	setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
 
-	// Call the parent start
-	SourceSDDS_base::start();
 }
 
 /**
@@ -345,27 +350,27 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 		throw BULKIO::dataSDDS::AttachError("Can only handle a single attach. Detach current stream first");
 	}
 
-	bool restart = false;
-
-	// This can happen if the user has set attachment override to false while the component is running.
-	if (started() && !attachment_override.enabled) {
-		LOG_WARN(SourceSDDS_i, "Cannot setup connection via attach when already running, will stop, attach, and restart");
-		restart = true;
-		stop();
-	}
-
 	m_attach_stream.attached = true;
 	m_attach_stream.id = stream.id;
 	m_attach_stream.multicastAddress = stream.multicastAddress;
 	m_attach_stream.port = stream.port;
 	m_attach_stream.vlan = stream.vlan;
 
-	if (restart) {
-		start();
-	}
-
 	if (m_attach_stream.id.empty() || m_attach_stream.id == "") {
 		m_attach_stream.id = ossie::generateUUID();
+	}
+
+	if (started() && !attachment_override.enabled) {
+		LOG_INFO(SourceSDDS_i, "Attempting to start SourceSDDS processing with provided attach values.");
+		try {
+			_start();
+		} catch (CF::Resource::StartError &e) {
+			std::stringstream errorText;
+			errorText << "Failed to start component with provided attach values, attach has failed with the error: " << e.msg;
+			LOG_ERROR(SourceSDDS_i, errorText.str());
+			m_attach_stream.attached = false;
+			throw BULKIO::dataSDDS::AttachError(errorText.str().c_str());
+		}
 	}
 
 	return CORBA::string_dup(m_attach_stream.id.c_str());

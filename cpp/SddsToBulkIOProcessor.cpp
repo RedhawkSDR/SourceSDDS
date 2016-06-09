@@ -142,6 +142,10 @@ void SddsToBulkIOProcessor::updateExpectedXdelta(double rate, bool complex) {
 	// Update our current sample rate and last times
 	m_current_sample_rate = rate;
 	// If complex then the samples per packet is half
+	if (m_bps == 0) {
+		LOG_FATAL(SddsToBulkIOProcessor, "Bits per sample on SDDS stream is set to zero! Cannot generate expected Xdelta, expect lots of errors.");
+		return;
+	}
 	int samps_per_packet = SDDS_DATA_SIZE / (m_bps / 8);
 
 	if (complex) {

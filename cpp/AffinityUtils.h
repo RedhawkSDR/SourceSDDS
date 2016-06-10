@@ -218,7 +218,7 @@ static int64_t get_rx_dropped(std::string interface) {
 	return atol(buffer);
 }
 
-int setPolicyAndPriority(pthread_t thread, int priority, std::string thread_desc) {
+int setPolicyAndPriority(pthread_t thread, CORBA::Long priority, std::string thread_desc) {
 	struct sched_param param;
 	int retVal = 0;
 	param.sched_priority = priority;
@@ -236,7 +236,7 @@ int setPolicyAndPriority(pthread_t thread, int priority, std::string thread_desc
 	return retVal;
 }
 
-int getPriority(pthread_t thread, int &priority, std::string thread_desc) {
+int getPriority(pthread_t thread, CORBA::Long &priority, std::string thread_desc) {
 	int retVal = 0, policy;
 	struct sched_param param;
 	retVal = pthread_getschedparam(thread, &policy, &param);

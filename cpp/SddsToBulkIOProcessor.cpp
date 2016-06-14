@@ -488,6 +488,7 @@ void SddsToBulkIOProcessor::unsetUpstreamSri() {
 	m_use_upstream_sri = false;
 	m_upstream_sri_set = false;
 	m_endianness = ENDIANNESS::ENDIAN_DEFAULT; // Default to big endian
+	m_sri.streamID = "DEFAULT_SDDS_STREAM_ID";
 }
 
 /**

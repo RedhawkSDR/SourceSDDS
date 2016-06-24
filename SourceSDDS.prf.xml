@@ -54,7 +54,7 @@
       <value>false</value>
     </simple>
     <simple id="attachment_override::ip_address" name="ip_address" type="string">
-      <description>IP address, unicast or multicast, of the desired host.</description>
+      <description>For the unicast case this is the IP address of the network interface to bind to where the address of 0.0.0.0 is acceptable. For the multicast case this is the multicast group to join.</description>
       <value>127.0.0.1</value>
     </simple>
     <simple id="attachment_override::vlan" name="vlan" type="ushort">

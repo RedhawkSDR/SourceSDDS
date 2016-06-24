@@ -43,7 +43,7 @@ Properties and their descriptions are below, struct props are shown with their s
 | Struct Property      | Description  |
 | ------------- | -----|
 | enabled | Denotes if the attachment override values should be used. |
-| ip_address | IP address, unicast or multicast, of the desired host. |
+| ip_address | For the unicast case this is the IP address of the network interface to bind to where the address of 0.0.0.0 is acceptable. For the multicast case this is the multicast group to join. |
 | vlan | VLAN of the interface carrying the SDDS traffic. Ignored if set to 0. |
 | port | Source port of SDDS traffic (default SDDS port is: 29495) |
 | endianness | The endianness (Big or Little) of the data portion of the SDDS packet. Defaults to Network Byte Order (Big Endian) |

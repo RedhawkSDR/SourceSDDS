@@ -23,7 +23,7 @@ import subprocess, signal, os
 
 LITTLE_ENDIAN=1234
 BIG_ENDIAN=4321
-DEBUG_LEVEL=5
+DEBUG_LEVEL=0
 
 # TODO: Add unit test for all the different start types eg. 
 # - Started with no attach or override then attachment override set true

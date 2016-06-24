@@ -48,7 +48,7 @@ Properties and their descriptions are below, struct props are shown with their s
 | port | Source port of SDDS traffic (default SDDS port is: 29495) |
 | endianness | The endianness (Big or Little) of the data portion of the SDDS packet. Defaults to Network Byte Order (Big Endian) |
 
-**_interface_** - The network interface to bind to.  Do not include the VLAN in the interface name, if a VLAN is specified either via the attach call or attachment_override, this will automatically be appended to the interface name. (eg. For eth0.28 the interface should be set to "eth0" NOT "eth0.28" )
+**_interface_** - The network interface you intend to be present or blank if no check is needed. Do not include the VLAN in the interface name. (eg. For eth0.28 the interface should be set to "eth0" NOT "eth0.28"). 
 
 **_advanced_configuration_** - Configuration options that affect when and how to forward SDDS packets to BulkIO
 

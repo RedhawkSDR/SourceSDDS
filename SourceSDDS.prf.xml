@@ -78,7 +78,7 @@
     <configurationkind kindtype="property"/>
   </struct>
   <simple id="interface" mode="readwrite" name="interface" type="string">
-    <description>The network interface to bind to.  Do not include the VLAN in the interface name, if a VLAN is specified either via the attach call or attachment_override, this will automatically be appended to the interface name. (eg. For eth0.28 the interface should be set to &quot;eth0&quot; NOT &quot;eth0.28&quot;)</description>
+    <description>The network interface you intend to be present or blank if no check is needed. Do not include the VLAN in the interface name. (eg. For eth0.28 the interface should be set to &quot;eth0&quot; NOT &quot;eth0.28&quot;).</description>
     <value>eth0</value>
     <kind kindtype="property"/>
     <action type="external"/>

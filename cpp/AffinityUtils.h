@@ -192,6 +192,11 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) 
 }
 
 static int64_t get_rx_dropped(std::string interface) {
+	if (interface.empty()) {
+		RH_NL_DEBUG("SourceSDDSUtils", "Interface provided is empty, cannot get rx_dropped statistics");
+		return 0;
+	}
+
 	FILE* fp;
 	char buffer[1024];
 	size_t bytes_read;

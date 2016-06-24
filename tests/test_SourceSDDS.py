@@ -23,7 +23,7 @@ import subprocess, signal, os
 
 LITTLE_ENDIAN=1234
 BIG_ENDIAN=4321
-DEBUG_LEVEL=0
+DEBUG_LEVEL=5
 
 # TODO: Add unit test for all the different start types eg. 
 # - Started with no attach or override then attachment override set true
@@ -120,7 +120,47 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         #######################################################################
         # Simulate regular component shutdown
         self.comp.releaseObject()
+        
+    def testEmptyInterface(self):
+        
+        self.setupComponent()
+        self.comp.interface = ''
+        
+        # Get ports
+        compDataOctetOut_out = self.comp.getPort('dataOctetOut')
 
+        # Set properties
+        sink = sb.DataSink()
+        # Connect components
+        self.comp.connect(sink, providesPortName='octetIn')
+
+        # Start components
+        self.comp.start()
+        sink.start()
+
+        # Create data
+        fakeData = [x % 256 for x in range(1024)]
+
+        # Create packet and send
+        h = Sdds.SddsHeader(0, DM = [0, 0, 1], BPS = [0, 1, 0, 0, 0], TTV = 1, TT = 0, FREQ = 60000000)
+        p = Sdds.SddsCharPacket(h.header, fakeData)
+        p.encode()
+        self.userver.send(p.encodedPacket)
+
+        # Wait for data to be received
+        time.sleep(1)
+        
+        # Get data
+        data = sink.getData()
+        
+        # Validate correct amount of data was received
+        self.assertEqual(len(data), 1024)
+        # Validate data is correct
+        self.assertEqual(data[:256], list(struct.pack('256B', *fakeData[:256])))
+        self.assertEqual(self.comp.status.dropped_packets, 0)
+        
+        sink.stop()
+        
     def testUnicastAttachSuccess(self):
         """Attaches to the dataSddsIn port 10 times making sure that it occurs successfully each time"""
         

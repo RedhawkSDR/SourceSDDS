@@ -77,7 +77,11 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 		LOG_WARN(SocketReader, "Cannot change the socket address while the socket reader thread is running");
 		return;
 	} else if (ip.empty()) {
-		LOG_ERROR(SocketReader, "IP or interface was empty when trying to setup the socket connection.")
+		std::stringstream ss;
+		ss << "IP address is empty, it must be provided.";
+		LOG_ERROR(SocketReader, ss.str());
+		throw BadParameterError(ss.str());
+		return;
 	}
 
 	// If we'd already been running on a different socket.

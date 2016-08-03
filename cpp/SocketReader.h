@@ -2,7 +2,7 @@
  * SocketReader.h
  *
  *  Created on: Mar 29, 2016
- *      Author: ylbagou
+ *      Author: 
  */
 
 #ifndef SOCKETREADER_H_

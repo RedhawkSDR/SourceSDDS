@@ -2,7 +2,7 @@
  * SocketReader.cpp
  *
  *  Created on: Mar 29, 2016
- *      Author: ylbagou
+ *      Author: 
  */
 
 #include "SocketReader.h"

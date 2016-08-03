@@ -2,7 +2,7 @@
  * SddsToBulkIOProcessor.h
  *
  *  Created on: Apr 5, 2016
- *      Author: ylbagou
+ *      Author: 
  */
 
 #ifndef SDDSTOBULKIOPROCESSOR_H_

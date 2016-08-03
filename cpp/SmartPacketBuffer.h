@@ -2,7 +2,7 @@
  * SmartPacketBuffer.h
  *
  *  Created on: Mar 29, 2016
- *      Author: ylbagou
+ *      Author: 
  */
 
 #ifndef SMARTPACKETBUFFER_H_

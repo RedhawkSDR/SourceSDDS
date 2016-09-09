@@ -140,9 +140,9 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 		pktbuffer->recycle_buffers(pktsToRecycle);
 	}
 
-	if (m_bulkIO_data.size() > 0) {
-		pushPacket();
-	}
+	//Push any remaining data and an EOS
+    pushPacket(true);
+
 
 	// Shutting down, recycle all the packets
 	pktbuffer->recycle_buffers(pktsToProcess);
@@ -285,14 +285,14 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			pktsToRecycle.push_back(pkt);
 			pkt_it = pktsToWork.erase(pkt_it);
 			if (m_bulkIO_data.size() > 0) {
-				pushPacket();
+				pushPacket(false);
 			}
 			continue;
 		}
 
 		// If the order is not valid we've lost some packets, we need to push what we have, reset the SRI.
 		if (!orderIsValid(pkt)) {
-			pushPacket();
+			pushPacket(false);
 			m_first_packet = true;
 			return;
 		} else {
@@ -302,7 +302,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			// If this is the case we need to push and restart with the new ttv state.
 			if (m_push_on_ttv && m_current_ttv_flag != (pkt->get_ttv() != 0) ) {
 				m_current_ttv_flag = (pkt->get_ttv() != 0);
-				pushPacket();
+				pushPacket(false);
 				return;
 			}
 
@@ -325,7 +325,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			}
 
 			if (sriChanged) {
-				pushPacket();
+				pushPacket(false);
 				pushSri();
 				updateExpectedXdelta(m_non_conforming_device ? pkt->get_rate() * 2 : pkt->get_rate(), pkt->cx != 0);
 				m_last_sdds_time = 0;
@@ -357,7 +357,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 			// We've worked through the full stack of packets, push the data and clear the buffer
 			if (pkt_it == pktsToWork.end()) {
-				pushPacket();
+				pushPacket(false);
 				m_bulkIO_data.clear();
 			}
 		}
@@ -391,8 +391,8 @@ void SddsToBulkIOProcessor::pushSri() {
  * Will also clear the m_bulkIO_data vector.
  */
 //TODO: Do we ever need to push an EOS flag?
-void SddsToBulkIOProcessor::pushPacket() {
-	if (m_bulkIO_data.size() == 0) {
+void SddsToBulkIOProcessor::pushPacket(bool eos) {
+	if (m_bulkIO_data.size() == 0 and !eos) {
 		return;
 	}
 
@@ -402,7 +402,7 @@ void SddsToBulkIOProcessor::pushPacket() {
 			m_octet_out->pushSRI(m_sri);
 		}
 
-		m_octet_out->pushPacket(m_bulkIO_data, m_bulkio_time_stamp, false, m_sri.streamID.in());
+		m_octet_out->pushPacket(m_bulkIO_data, m_bulkio_time_stamp, eos, m_sri.streamID.in());
 		break;
 	case 16:
 		if (m_short_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
@@ -414,7 +414,7 @@ void SddsToBulkIOProcessor::pushPacket() {
 			swab(&m_bulkIO_data[0], &m_bulkIO_data[0], m_bulkIO_data.size());
 		}
 
-		m_short_out->pushPacket(reinterpret_cast<short*> (&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(short), m_bulkio_time_stamp, false, m_sri.streamID.in());
+		m_short_out->pushPacket(reinterpret_cast<short*> (&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(short), m_bulkio_time_stamp, eos, m_sri.streamID.in());
 		break;
 	case 32:
 		if (m_float_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
@@ -429,7 +429,7 @@ void SddsToBulkIOProcessor::pushPacket() {
 			}
 		}
 
-		m_float_out->pushPacket(reinterpret_cast<float*>(&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(float), m_bulkio_time_stamp, false, m_sri.streamID.in());
+		m_float_out->pushPacket(reinterpret_cast<float*>(&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(float), m_bulkio_time_stamp, eos, m_sri.streamID.in());
 		break;
 	default:
 		LOG_ERROR(SddsToBulkIOProcessor, "Could not push packet, the bits per sample are non-standard and set to: " << m_bps);

@@ -87,15 +87,15 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
         
         # Try to attach
-        attachId = ''
+        self.attachId = ''
         
         try:
-            attachId = compDataSddsIn.attach(streamDef, 'test') 
+            self.attachId = compDataSddsIn.attach(streamDef, 'test') 
         except:
             print "ATTACH FAILED"
             attachId = ''
         
-        self.assertTrue(attachId != '', "Failed to attach to SourceSDDS component")
+        self.assertTrue(self.attachId != '', "Failed to attach to SourceSDDS component")
         
     def testScaBasicBehavior(self):
         """Basic test, start, stop and query component"""
@@ -203,6 +203,240 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             if count == 10:
                 valid = False
 
+    def testEOSonDetach(self):
+        """Checks that an EOS is sent on Detach"""
+        self.setupComponent()
+        
+        # Get ports
+        compDataFloatOut_out = self.comp.getPort('dataShortOut')
+        
+        sink = sb.DataSink()
+ 
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
+
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        
+        # Create packet and send
+        h = Sdds.SddsHeader(0, DM = [0, 1, 0], TTV = 1, TT = 0)
+        p = Sdds.SddsShortPacket(h.header, fakeData)
+        p.encode()
+        self.userver.send(p.encodedPacket)
+
+        # Wait for data to be received
+        time.sleep(1)
+        
+        # Get data
+        data = sink.getData()
+        
+        # Validate correct amount of data was received
+        self.assertEqual(len(data), 512)
+
+        # Validate data is correct        
+        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))
+        
+        
+        #Send Detach
+        compDataSddsIn.detach(self.attachId )
+        time.sleep(1)
+        
+        data = sink.getData()             
+        self.assertTrue(sink.eos())
+
+    def testEOSonStop(self):
+        """Checks that an EOS is sent on Stop """
+        self.setupComponent()
+        
+        # Get ports
+        compDataFloatOut_out = self.comp.getPort('dataShortOut')
+        
+        sink = sb.DataSink()
+ 
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
+
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        
+        # Create packet and send
+        h = Sdds.SddsHeader(0, DM = [0, 1, 0], TTV = 1, TT = 0)
+        p = Sdds.SddsShortPacket(h.header, fakeData)
+        p.encode()
+        self.userver.send(p.encodedPacket)
+
+
+        # Wait for data to be received
+        time.sleep(1)
+        
+        # Get data
+        data = sink.getData()
+        
+        # Validate correct amount of data was received
+        self.assertEqual(len(data), 512)
+
+        # Validate data is correct        
+        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))
+        
+        self.comp.stop()
+        
+        time.sleep(1)
+        
+        data = sink.getData()             
+        self.assertTrue(sink.eos())
+
+    def testRestart(self):
+        """Checks that an Component will run after being stopped without a new attach """
+        self.setupComponent()
+        
+        # Get ports
+        compDataFloatOut_out = self.comp.getPort('dataShortOut')
+        
+        sink = sb.DataSink()
+ 
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
+
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        
+        # Create packet and send
+        h = Sdds.SddsHeader(0, DM = [0, 1, 0], TTV = 1, TT = 0)
+        p = Sdds.SddsShortPacket(h.header, fakeData)
+        p.encode()
+        self.userver.send(p.encodedPacket)
+
+
+        # Wait for data to be received
+        time.sleep(1)
+        
+        # Get data
+        data = sink.getData()
+        
+        # Validate correct amount of data was received
+        self.assertEqual(len(data), 512)
+
+        # Validate data is correct        
+        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))
+        
+        self.comp.stop()
+        
+        time.sleep(1)
+        
+        data = sink.getData()             
+        self.assertTrue(sink.eos())
+        
+        #Restart Component and send more data
+        self.comp.start()
+        self.userver.send(p.encodedPacket)      
+        
+        # Wait for data to be received
+        time.sleep(1)
+        
+        # Get data
+        data = sink.getData()
+        
+        # Validate correct amount of data was received
+        self.assertEqual(len(data), 512)
+
+        # Validate data is correct        
+        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))  
+
+    def testRestartAfterDetach(self):
+        """Checks that an Component will run after being detached and reattached without stopping """
+        self.setupComponent()
+        
+        # Get ports
+        compDataFloatOut_out = self.comp.getPort('dataShortOut')
+        
+        sink = sb.DataSink()
+ 
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
+
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        
+        # Create packet and send
+        h = Sdds.SddsHeader(0, DM = [0, 1, 0], TTV = 1, TT = 0)
+        p = Sdds.SddsShortPacket(h.header, fakeData)
+        p.encode()
+        self.userver.send(p.encodedPacket)
+
+        # Wait for data to be received
+        time.sleep(1)
+        
+        # Get data
+        data = sink.getData()
+        
+        # Validate correct amount of data was received
+        self.assertEqual(len(data), 512)
+
+        # Validate data is correct        
+        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))
+        
+        
+        #Send Detach
+        compDataSddsIn.detach(self.attachId )
+        time.sleep(1)
+        
+        data = sink.getData()             
+        self.assertTrue(sink.eos())
+        
+        #Re-Attach
+        streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        
+        # Try to attach
+        self.attachId = ''
+        
+        try:
+            self.attachId = compDataSddsIn.attach(streamDef, 'test') 
+        except:
+            print "ATTACH FAILED"
+            attachId = ''
+        
+        self.assertTrue(self.attachId != '', "Failed to attach to SourceSDDS component")
+        
+        #Resend Data
+        self.userver.send(p.encodedPacket)      
+        
+        # Wait for data to be received
+        time.sleep(1)
+        
+        # Get data
+        data = sink.getData()
+        
+        # Validate correct amount of data was received
+        self.assertEqual(len(data), 512)
+
+        # Validate data is correct        
+        self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))  
+
+  
     def testUnicastTTVBecomesTrue(self):
         
         self.setupComponent()

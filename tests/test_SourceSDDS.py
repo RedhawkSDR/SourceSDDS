@@ -136,8 +136,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         #######################################################################
         # Make sure start and stop can be called without throwing exceptions
         self.comp.start()
+        time.sleep(1)
         self.comp.stop()
-
+        time.sleep(1)
         #######################################################################
         # Simulate regular component shutdown
         self.comp.releaseObject()

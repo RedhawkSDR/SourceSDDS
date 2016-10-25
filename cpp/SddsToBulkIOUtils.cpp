@@ -132,7 +132,7 @@ void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed, b
 		recXdelta *= 0.5;
 	}
 
-	if (recXdelta != sri.xdelta) {
+	if (floatingPointCompare(recXdelta,sri.xdelta,7) !=0) {
 		changed = true;
 		sri.xdelta = recXdelta;
 	}

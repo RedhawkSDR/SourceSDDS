@@ -35,4 +35,20 @@ unsigned short getBps(SDDSpacket* sdds_pkt);
 void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed, bool non_conforming_device);
 void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, std::string &endianness);
 
+
+/* floatingPointCompare is a helper function to handle floating point comparison
+ * Return values:
+ * if lhs == rhs: 0.0
+ * if lhs >  rhs: 1.0 or greater
+ * if lhs <  rhs: -1.0 or less
+ * Recommended usage is to convert a comparison such as: (lhs OP rhs)
+ * to (floatingPointCompare(lhs,rhs) OP 0), where OP is a comparison operator
+ * (==, <, >, <=, >=, !=).
+ * "places" is used to specify precision. The default is 1, which
+ * uses a single decimal place of precision.
+ */
+inline double floatingPointCompare(double lhs, double rhs, size_t places = 1){
+	return round((lhs-rhs)*pow(10,places));
+}
+
 #endif

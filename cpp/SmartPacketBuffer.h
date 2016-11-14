@@ -77,12 +77,11 @@ public:
      */
     void initialize(size_type capacity) {
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
-    	size_t i;
-
+		m_shuttingDown = false;
     	m_empty_buffers.clear();
 
     	// Allocate the memory and fill the empty buffers
-    	for (i = 0; i < capacity; ++i) {
+    	for (size_t i = 0; i < capacity; ++i) {
     		m_empty_buffers.push_back(TypePtr(new T()));
     	}
     	lock.unlock();
@@ -93,10 +92,13 @@ public:
      * frees all the memory that the smart buffer currently is keeping track of.
      * This does not include any buffers currently held by other threads which
      * would need to be recycled or returned prior to calling destroyBuffers.
-     * There is no harm in calling destroyBuffers more than once if one needs
+     * There is no harm in calling shutDown more than once if one needs
      * to free the thread holding the data to recycle it.
+     *
+     * After a call to shutDown, you will need to call initialize again before
+     * using this class
      */
-    void destroyBuffers() {
+    void shutDown() {
     	m_shuttingDown = true;
     	m_no_empty_buffers.notify_all();
     	m_no_full_buffers.notify_all();
@@ -108,8 +110,6 @@ public:
     	boost::unique_lock<boost::mutex> lock2(m_empty_buffer_mutex);
     	m_empty_buffers.clear();
 		lock2.unlock();
-
-		m_shuttingDown = false;
     }
 
 
@@ -174,7 +174,11 @@ public:
      */
     template<typename Container>
     void push_full_buffers(Container &que, size_t num) {
-    	if (m_shuttingDown) {return;}
+    	if (m_shuttingDown) {
+    		que.erase(que.begin(), que.begin() + num);
+    		return;
+    	}
+
     	boost::unique_lock<boost::mutex> lock(m_full_buffer_mutex);
 		m_full_buffers.insert(m_full_buffers.end(), que.begin(), que.begin() + num);
 		que.erase(que.begin(), que.begin() + num);
@@ -240,7 +244,11 @@ public:
      */
     template<typename Container>
     void recycle_buffers(Container &que) {
-    	if (m_shuttingDown) {return;}
+    	if (m_shuttingDown) {
+    		que.clear();
+    		return;
+    	}
+
     	boost::unique_lock<boost::mutex> lock(m_empty_buffer_mutex);
     	m_empty_buffers.insert(m_empty_buffers.end(), que.begin(), que.end());
     	que.clear();

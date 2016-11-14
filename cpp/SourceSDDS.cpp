@@ -466,7 +466,7 @@ void SourceSDDS_i::destroyBuffersAndJoinThreads() {
 	m_sddsToBulkIO.shutDown();
 
 	LOG_DEBUG(SourceSDDS_i, "Destroying the existing packet buffers");
-	m_pktbuffer.destroyBuffers();
+	m_pktbuffer.shutDown();
 
 	// Delete the socket reader and sddsToBulkIO thread if it already exists
 	if (m_socketReaderThread) {
@@ -482,10 +482,6 @@ void SourceSDDS_i::destroyBuffersAndJoinThreads() {
 		delete m_sddsToBulkIOThread;
 		m_sddsToBulkIOThread = NULL;
 	}
-
-	LOG_DEBUG(SourceSDDS_i, "Destroying any packet buffers added during thread shutdown");
-	// Calling destroy a second time on purpose in case during thread shutdown the threads recycled some buffers.
-	m_pktbuffer.destroyBuffers();
 
 	LOG_DEBUG(SourceSDDS_i, "Everything should be shutdown and joined");
 }

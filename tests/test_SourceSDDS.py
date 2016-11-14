@@ -725,9 +725,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         for x in buf_and_read:
             self.comp.advanced_optimizations.buffer_size = x[0]
             self.comp.advanced_optimizations.pkts_per_socket_read = x[1]
-            time.sleep(0.3)
+            time.sleep(2)
             self.comp.start()
-            self.assertTrue(str(x[0] - x[1]) in self.comp.status.empty_buffers_available, "Expected " + str(x[0] - x[1]) + " empty buffers available but received " + self.comp.status.empty_buffers_available)
+            diff = str(x[0] - x[1])
+            available = self.comp.status.empty_buffers_available
+            self.assertTrue(diff in available, "Expected " + diff + " empty buffers available but received " + available)
             self.comp.stop()
 
     def testUdpBufferSize(self):

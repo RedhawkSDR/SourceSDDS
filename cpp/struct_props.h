@@ -285,6 +285,7 @@ struct status_struct {
         input_stream_id = "";
         time_slips = 0LL;
         num_packets_dropped_by_nic = 0;
+        interface = "";
     };
 
     static std::string getId() {
@@ -306,6 +307,7 @@ struct status_struct {
     std::string input_stream_id;
     CORBA::LongLong time_slips;
     CORBA::Long num_packets_dropped_by_nic;
+    std::string interface;
 };
 
 inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
@@ -357,6 +359,9 @@ inline bool operator>>= (const CORBA::Any& a, status_struct& s) {
     if (props.contains("status::num_packets_dropped_by_nic")) {
         if (!(props["status::num_packets_dropped_by_nic"] >>= s.num_packets_dropped_by_nic)) return false;
     }
+    if (props.contains("status::interface")) {
+        if (!(props["status::interface"] >>= s.interface)) return false;
+    }
     return true;
 }
 
@@ -392,6 +397,8 @@ inline void operator<<= (CORBA::Any& a, const status_struct& s) {
     props["status::time_slips"] = s.time_slips;
  
     props["status::num_packets_dropped_by_nic"] = s.num_packets_dropped_by_nic;
+ 
+    props["status::interface"] = s.interface;
     a <<= props;
 }
 
@@ -425,6 +432,8 @@ inline bool operator== (const status_struct& s1, const status_struct& s2) {
     if (s1.time_slips!=s2.time_slips)
         return false;
     if (s1.num_packets_dropped_by_nic!=s2.num_packets_dropped_by_nic)
+        return false;
+    if (s1.interface!=s2.interface)
         return false;
     return true;
 }

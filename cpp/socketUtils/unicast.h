@@ -40,9 +40,9 @@ typedef struct {
   struct sockaddr_in addr;
 } unicast_t;
 
-unicast_t unicast_client (const char* iface, const char* group, int port) throw (BadParameterError);
+unicast_t unicast_client (const char* iface, const char* group, int port, std::string& chosen_iface) throw (BadParameterError);
 ssize_t unicast_receive (unicast_t client, void* buffer, size_t bytes, unsigned int to_in_msecs= 0);
-unicast_t unicast_server (const char* iface, const char* group, int port);
+unicast_t unicast_server (const char* iface, const char* group, int port, std::string& chosen_iface);
 ssize_t unicast_transmit (unicast_t server, const void* buffer, size_t bytes);
 int unicast_poll_in (unicast_t client, int timeout);
 void unicast_close(unicast_t socket);

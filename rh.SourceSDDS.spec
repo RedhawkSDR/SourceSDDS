@@ -30,7 +30,7 @@ Prefix:         %{_prefix}
 %define _infodir       %{_prefix}/info
 
 Name:           rh.SourceSDDS
-Version:        1.0.0
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        Component %{name}
 
@@ -83,7 +83,8 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,redhawk,redhawk,-)
-%dir %{_prefix}/dom/components/rh/SourceSDDS
+%dir %{_sdrroot}/dom/components/rh
+%dir %{_sdrroot}/dom/components/rh/SourceSDDS
 %{_prefix}/dom/components/rh/SourceSDDS/SourceSDDS.scd.xml
 %{_prefix}/dom/components/rh/SourceSDDS/SourceSDDS.prf.xml
 %{_prefix}/dom/components/rh/SourceSDDS/SourceSDDS.spd.xml

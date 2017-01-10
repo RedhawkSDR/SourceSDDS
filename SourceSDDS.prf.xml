@@ -27,12 +27,10 @@ with this program.  If not, see http://www.gnu.org/licenses/.
       <value>20000</value>
       <units>pkts</units>
     </simple>
-    <simple id="advanced_optimizations::udp_socket_buffer_size" mode="readwrite" name="udp_socket_buffer_size" type="ulong">
+    <simple id="advanced_optimizations::udp_socket_buffer_size" name="udp_socket_buffer_size" type="ulong">
       <description>The socket buffer size requested via a call to setsockopt. Once the socket is opened, the user provided value will be replaced with the true value returned by the kernel. Note that the actual value set will depend on system configuration; in addition, the kernel will double the value to allow space for bookkeeping overhead. </description>
       <value>134217728</value>
       <units>bytes</units>
-      <kind kindtype="property"/>
-      <action type="external"/>
     </simple>
     <simple id="advanced_optimizations::pkts_per_socket_read" name="pkts_per_socket_read" type="ushort">
       <description>The maximum number of SDDS packets read per read of the socket. The recvmmsg system call is used to read multiple UDP packets per system call, and a non-blocking socket used so at most, pkts_per_socket_read will be read.</description>
@@ -80,11 +78,9 @@ with this program.  If not, see http://www.gnu.org/licenses/.
       <description>VLAN of the interface carrying the SDDS traffic. Ignored if set to 0.</description>
       <value>0</value>
     </simple>
-    <simple id="attachment_override:port" mode="readwrite" name="port" type="ushort">
+    <simple id="attachment_override:port" name="port" type="ushort">
       <description>Source port of SDDS traffic (default SDDS port is: 29495) </description>
       <value>29495</value>
-      <kind kindtype="property"/>
-      <action type="external"/>
     </simple>
     <simple id="attachment_override:endianness" name="endianness" type="string">
       <description>The endianness (Big or Little) of the data portion of the SDDS packet. Defaults to Network Byte Order (Big Endian)</description>
@@ -180,6 +176,10 @@ with this program.  If not, see http://www.gnu.org/licenses/.
     <simple id="status::num_packets_dropped_by_nic" name="num_packets_dropped_by_nic" type="long">
       <description>Read from /sys/class/&lt;interface>/statistics/rx_dropped, indicates the number of packets received by the network device but dropped, that are not forwarded to the upper layers for packet processing. This is NOT an indication of full buffers but instead a hint that something may be missconfigured as the NIC is receiving packets it does not know what to do with. See the network driver for the exact meaning of this value.</description>
       <value>0</value>
+    </simple>
+    <simple id="status::interface" name="interface" type="string">
+      <description>The network interface in use, chosen based on 1) interface specified, or if blank 2) VLAN specified, or 3) unicast IP or multicast group of incoming data and system's ip routing table, or 4) the first suitable interface found.</description>
+      <value></value>
     </simple>
     <configurationkind kindtype="property"/>
   </struct>

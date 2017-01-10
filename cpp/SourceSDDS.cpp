@@ -117,7 +117,9 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 	retVal.input_endianness = m_sddsToBulkIO.getEndianness();
 	retVal.time_slips = m_sddsToBulkIO.getTimeSlips();
 
-	retVal.num_packets_dropped_by_nic = get_rx_dropped(interface);
+	retVal.num_packets_dropped_by_nic = get_rx_dropped(status.interface);
+
+	retVal.interface = status.interface;
 
 	return retVal;
 }
@@ -348,6 +350,7 @@ void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
 		m_socketReader.setConnectionInfo(interface, m_attach_stream.multicastAddress, m_attach_stream.vlan, m_attach_stream.port);
 	}
 	m_socketReader.setPktsPerRead(advanced_optimizations.pkts_per_socket_read);
+	status.interface = m_socketReader.getInterface();
 }
 
 /**

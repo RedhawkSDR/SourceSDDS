@@ -33,7 +33,7 @@
 #include "SourceNicUtils.h"
 #include <ossie/debug.h>
 
-static multicast_t multicast_open_ (const char* iface, const char* group, int port)
+static multicast_t multicast_open_ (const char* iface, const char* group, int port, std::string& chosen_iface)
 {
   unsigned int ii;
 
@@ -96,6 +96,12 @@ static multicast_t multicast_open_ (const char* iface, const char* group, int po
 				  }
 			  }
 
+			  char* vlan = strchr(dev.ifr_ifrn.ifrn_name, '.');
+			  if (vlan==NULL)
+			      chosen_iface = dev.ifr_ifrn.ifrn_name;
+			  else
+			      chosen_iface.assign(&dev.ifr_ifrn.ifrn_name[0], vlan-&dev.ifr_ifrn.ifrn_name[0]);
+
 			  free(devs.ifc_buf);
 			  return multicast;
 		  }catch(...){};
@@ -113,9 +119,9 @@ static multicast_t multicast_open_ (const char* iface, const char* group, int po
 }
 
 
-multicast_t multicast_client (const char* iface, const char* group, int port) throw (BadParameterError)
+multicast_t multicast_client (const char* iface, const char* group, int port, std::string& chosen_iface) throw (BadParameterError)
 {
-  multicast_t client = multicast_open_(iface, group, port);
+  multicast_t client = multicast_open_(iface, group, port, chosen_iface);
   return client;
 }
 
@@ -126,9 +132,9 @@ ssize_t multicast_receive (multicast_t client, void* buffer, size_t bytes)
 }
 
 
-multicast_t multicast_server (const char* iface, const char* group, int port)
+multicast_t multicast_server (const char* iface, const char* group, int port, std::string& chosen_iface)
 {
-  multicast_t server = multicast_open_(iface, group, port);
+  multicast_t server = multicast_open_(iface, group, port, chosen_iface);
   if (server.sock != -1) {
     uint8_t ttl = 32;
     VERIFY_ERR(setsockopt(server.sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) == 0, "set ttl");

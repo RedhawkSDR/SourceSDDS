@@ -44,8 +44,7 @@ static inline void verify_ (int condition, const char* message, const char* cond
 }
 #define verify(CONDITION, MESSAGE) verify_(CONDITION, MESSAGE, #CONDITION, __FILE__, __LINE__)
 
-
-static unicast_t unicast_open_ (const char* iface, const char* group, int port)
+static unicast_t unicast_open_ (const char* iface, const char* group, int port, std::string& chosen_iface)
 {
   unsigned int ii;
 
@@ -81,6 +80,13 @@ static unicast_t unicast_open_ (const char* iface, const char* group, int port)
 			  unicast.addr.sin_port = htons(port);
 			  if (bind(unicast.sock, (struct sockaddr*)&unicast.addr, sizeof(struct sockaddr)) < 0)
 			  	  	 printf(" Unable to bind unicast socket (%i) to address (%d:%d) \n", unicast.sock,unicast.addr.sin_addr.s_addr, unicast.addr.sin_port);
+
+			  char* vlan = strchr(dev.ifr_ifrn.ifrn_name, '.');
+			  if (vlan==NULL)
+			      chosen_iface = dev.ifr_ifrn.ifrn_name;
+			  else
+			      chosen_iface.assign(&dev.ifr_ifrn.ifrn_name[0], vlan-&dev.ifr_ifrn.ifrn_name[0]);
+
 			  free(devs.ifc_buf);
 			  return unicast;
 		  }catch(...){};
@@ -97,9 +103,9 @@ static unicast_t unicast_open_ (const char* iface, const char* group, int port)
 }
 
 
-unicast_t unicast_client (const char* iface, const char* group, int port) throw (BadParameterError)
+unicast_t unicast_client (const char* iface, const char* group, int port, std::string& chosen_iface) throw (BadParameterError)
 {
-  unicast_t client = unicast_open_(iface, group, port);
+  unicast_t client = unicast_open_(iface, group, port, chosen_iface);
   return client;
 }
 
@@ -114,9 +120,9 @@ ssize_t unicast_receive (unicast_t client, void* buffer, size_t bytes, unsigned 
 }
 
 
-unicast_t unicast_server (const char* iface, const char* group, int port)
+unicast_t unicast_server (const char* iface, const char* group, int port, std::string& chosen_iface)
 {
-  unicast_t server = unicast_open_(iface, group, port);
+  unicast_t server = unicast_open_(iface, group, port, chosen_iface);
   if (server.sock != -1) {
     uint8_t ttl = 32;
     verify(setsockopt(server.sock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl)) == 0, "set ttl");

@@ -33,9 +33,9 @@ typedef struct {
   struct sockaddr_in addr;
 } multicast_t;
 
-multicast_t multicast_client (const char* iface, const char* group, int port) throw (BadParameterError);
+multicast_t multicast_client (const char* iface, const char* group, int port, std::string& chosen_iface) throw (BadParameterError);
 ssize_t multicast_receive (multicast_t client, void* buffer, size_t bytes);
-multicast_t multicast_server (const char* iface, const char* group, int port);
+multicast_t multicast_server (const char* iface, const char* group, int port, std::string& chosen_iface);
 ssize_t multicast_transmit (multicast_t server, const void* buffer, size_t bytes);
 int multicast_poll_in (multicast_t client, int timeout);
 void multicast_close(multicast_t socket);

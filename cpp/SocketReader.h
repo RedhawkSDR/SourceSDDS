@@ -54,6 +54,7 @@ public:
     void setConnectionInfo(std::string interface, std::string ip, uint16_t vlan, uint16_t port) throw (BadParameterError);
     void setSocketBufferSize(int socket_buffer_size);
     size_t getSocketBufferSize();
+    std::string getInterface();
     bool setSocketBlockingEnabled(int fd, bool blocking);
 private:
     bool m_shuttingDown;
@@ -64,7 +65,9 @@ private:
     size_t m_socket_buffer_size;
     multicast_t m_multicast_connection;
     unicast_t m_unicast_connection;
+    std::string m_interface;
     void confirmSingleHost(struct mmsghdr msgs[], size_t len);
+    void getInterfaceFromRoutes(std::string ip="224.0.0.0");
 
 };
 

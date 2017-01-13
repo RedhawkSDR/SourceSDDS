@@ -32,19 +32,57 @@
 #include <iostream>
 #include "unicast.h"
 #include <ossie/debug.h>
+#include <errno.h>
 
 /* it is probably desirable to convert to C++ and throw exceptions instead. */
 static inline void verify_ (int condition, const char* message, const char* condtext, const char* file, int line) {
   if (!condition) {
+	  int errsv = errno;
 	  std::stringstream ss;
-	  ss << "Verify failed " << file << " at line " << line << ": " << message << " (" << condtext << ")";
+	  ss << "Verify failed [" << errsv << ":" << strerror(errsv) << "] " << file << " at line " << line << ": " << message << " (" << condtext << ")";
 	RH_NL_ERROR("unicast", ss.str());
     throw(BadParameterError3(ss.str()));
   }
 }
 #define verify(CONDITION, MESSAGE) verify_(CONDITION, MESSAGE, #CONDITION, __FILE__, __LINE__)
 
-static unicast_t unicast_open_ (const char* iface, const char* group, int port, std::string& chosen_iface)
+/* it is probably desirable to convert to C++ and throw exceptions instead. */
+static inline void verify_warn_ (int condition, const char* message, const char* condtext, const char* file, int line) {
+  if (!condition) {
+	  int errsv = errno;
+	  std::stringstream ss;
+	  ss << "Verify failed [" << errsv << ":" << strerror(errsv) << "] " << file << " at line " << line << ": " << message << " (" << condtext << ")";
+	RH_NL_WARN("unicast", ss.str());
+    throw(BadParameterError3(ss.str()));
+  }
+}
+#define verify_warn(CONDITION, MESSAGE) verify_warn_(CONDITION, MESSAGE, #CONDITION, __FILE__, __LINE__)
+
+/* it is probably desirable to convert to C++ and throw exceptions instead. */
+static inline void verify_info_ (int condition, const char* message, const char* condtext, const char* file, int line) {
+  if (!condition) {
+	  int errsv = errno;
+	  std::stringstream ss;
+	  ss << "Verify failed [" << errsv << ":" << strerror(errsv) << "] " << file << " at line " << line << ": " << message << " (" << condtext << ")";
+	RH_NL_INFO("unicast", ss.str());
+    throw(BadParameterError3(ss.str()));
+  }
+}
+#define verify_info(CONDITION, MESSAGE) verify_info_(CONDITION, MESSAGE, #CONDITION, __FILE__, __LINE__)
+
+/* it is probably desirable to convert to C++ and throw exceptions instead. */
+static inline void verify_debug_ (int condition, const char* message, const char* condtext, const char* file, int line) {
+  if (!condition) {
+	  int errsv = errno;
+	  std::stringstream ss;
+	  ss << "Verify failed [" << errsv << ":" << strerror(errsv) << "] " << file << " at line " << line << ": " << message << " (" << condtext << ")";
+	RH_NL_DEBUG("unicast", ss.str());
+    throw(BadParameterError3(ss.str()));
+  }
+}
+#define verify_debug(CONDITION, MESSAGE) verify_debug_(CONDITION, MESSAGE, #CONDITION, __FILE__, __LINE__)
+
+static unicast_t unicast_open_ (const char* iface, const char* ip, int port, std::string& chosen_iface)
 {
   unsigned int ii;
 
@@ -52,14 +90,17 @@ static unicast_t unicast_open_ (const char* iface, const char* group, int port, 
   verify(unicast.sock >= 0, "create socket");
   int one = 1;
   verify(setsockopt(unicast.sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == 0, "reuse address");
+
   /* Enumerate all the devices. */
   struct ifconf devs = {0};
   devs.ifc_len = 512*sizeof(struct ifreq);
   devs.ifc_buf = (char*)malloc(devs.ifc_len);
   verify(devs.ifc_buf != 0, "memory allocation");
   verify(ioctl(unicast.sock, SIOCGIFCONF, &devs) >= 0, "enum devices");
+
+  bool any = (!*iface);
+  bool any_ip = (inet_addr(ip) == 0);
   for (ii = 0; ii<devs.ifc_len/sizeof(struct ifreq); ii++) {
-	  bool any = (!*iface);
 	  bool any_interface_vlan_match = false;
 	  if(*iface && iface[0] == '.'){
 		  size_t len_dev = strlen(devs.ifc_req[ii].ifr_ifrn.ifrn_name);
@@ -67,22 +108,32 @@ static unicast_t unicast_open_ (const char* iface, const char* group, int port, 
 		  if(len_dev >= len_iface && !strcmp(devs.ifc_req[ii].ifr_ifrn.ifrn_name + len_dev-len_iface,iface))
 			  any_interface_vlan_match = true;
 	  }
+	  bool ip_interface_match = any_ip || (inet_addr(ip) == ((struct sockaddr_in*)(&devs.ifc_req[ii].ifr_addr))->sin_addr.s_addr);
 	  bool interface_exact_match = (strcmp(iface, devs.ifc_req[ii].ifr_ifrn.ifrn_name) == 0);
-	  if (any || any_interface_vlan_match || interface_exact_match) {
-		  try{
-			  struct ifreq dev = devs.ifc_req[ii];
-			  verify(ioctl(unicast.sock, SIOCGIFFLAGS, &dev) >= 0, "get flags");
-			  verify(dev.ifr_flags & IFF_UP, "interface up");
-			  //verify(!(dev.ifr_flags & IFF_LOOPBACK), "not loopback");
-			  verify(ioctl(unicast.sock, SIOCGIFINDEX, &dev) == 0, "get index");
-			  unicast.addr.sin_family = AF_INET;
-			  unicast.addr.sin_addr.s_addr = inet_addr(group);//mreqn.imr_multiaddr.s_addr;
-			  unicast.addr.sin_port = htons(port);
-			  if (bind(unicast.sock, (struct sockaddr*)&unicast.addr, sizeof(struct sockaddr)) < 0)
-			  	  	 printf(" Unable to bind unicast socket (%i) to address (%d:%d) \n", unicast.sock,unicast.addr.sin_addr.s_addr, unicast.addr.sin_port);
+	  RH_NL_DEBUG("unicast", ii<<": "<<devs.ifc_req[ii].ifr_ifrn.ifrn_name<<"  "<<ip<<":"<<port<<"  any="<<any<<" any+vlan="<<any_interface_vlan_match<<" ip="<<ip_interface_match<<" exact="<<interface_exact_match);
 
+	  // If device meets IP address/interface/vlan requirements, try to bind
+	  if (ip_interface_match && (any || any_interface_vlan_match || interface_exact_match)) {
+		  try{
+			  // We found an interface that meets IP/VLAN/interface specified
+			  // Now make sure it meets all other requirements
+			  struct ifreq dev = devs.ifc_req[ii];
+			  verify_info(ioctl(unicast.sock, SIOCGIFFLAGS, &dev) >= 0, "get flags");
+			  verify_info(dev.ifr_flags & IFF_UP, "interface up");
+			  //verify_info(!(dev.ifr_flags & IFF_LOOPBACK), "not loopback");
+			  verify_info(ioctl(unicast.sock, SIOCGIFINDEX, &dev) == 0, "get index");
+
+			  // Now we bind...
+			  unicast.addr.sin_family = AF_INET;
+			  unicast.addr.sin_addr.s_addr = inet_addr(ip);//mreqn.imr_multiaddr.s_addr;
+			  unicast.addr.sin_port = htons(port);
+			  verify_info(bind(unicast.sock, (struct sockaddr*)&unicast.addr, sizeof(struct sockaddr)) == 0, "bind");
+
+			  // Success! report back interface name
 			  char* vlan = strchr(dev.ifr_ifrn.ifrn_name, '.');
-			  if (vlan==NULL)
+			  if (any && any_ip)
+				  chosen_iface = "ALL";
+			  else if (vlan==NULL)
 			      chosen_iface = dev.ifr_ifrn.ifrn_name;
 			  else
 			      chosen_iface.assign(&dev.ifr_ifrn.ifrn_name[0], vlan-&dev.ifr_ifrn.ifrn_name[0]);

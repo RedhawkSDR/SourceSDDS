@@ -109,28 +109,24 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			memset(&m_unicast_connection, 0, sizeof(m_unicast_connection)); }
 
 	in_addr_t lowMulti = inet_network("224.0.0.0");
-	in_addr_t highMulti = inet_network("239.255.255.250");
-
-	m_interface = interface;
+	in_addr_t highMulti = inet_network("239.255.255.255");
 
 	if (vlan) {
 		std::stringstream ss;
-		ss << m_interface << "." << vlan;
-		m_interface = ss.str();
+		ss << interface << "." << vlan;
+		interface = ss.str();
 	}
 
-	// Looks like we're doing a multicast port. Create multicast client.
 	// This throws BAD_PARAM if there are issues....sometimes. Other times it just returns -1.
-	if ((inet_network(ip.c_str()) > lowMulti) && (inet_addr(ip.c_str()) < highMulti)) {
+	if ((inet_network(ip.c_str()) >= lowMulti) && (inet_addr(ip.c_str()) <= highMulti)) {
 		// If interface is blank, try using routing table
-		if (m_interface.empty()) {
-			getInterfaceFromRoutes();
+		if (interface.empty()) {
+			interface = getMcastIfaceFromRoutes(ip);
 		}
-		m_multicast_connection = multicast_client(m_interface.c_str(), ip.c_str(), port, m_interface);
+		m_multicast_connection = multicast_client(interface.c_str(), ip.c_str(), port, interface);
 	} else {
-		m_unicast_connection = unicast_client(m_interface.c_str(), ip.c_str(), port, m_interface);
+		m_unicast_connection = unicast_client(interface.c_str(), ip.c_str(), port, interface);
 	}
-	LOG_INFO(SocketReader, "Set connection info to Interface: " << m_interface << " IP: " << ip << " Port: " << port);
 
 	int socket = (m_multicast_connection.sock != 0) ? (m_multicast_connection.sock) : (m_unicast_connection.sock);
 
@@ -139,10 +135,12 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 		memset(&m_unicast_connection, 0, sizeof(m_unicast_connection));
 
 		std::stringstream ss;
-		ss << "Could not create socket, please check the parameters provided: Interface: " << m_interface << " IP: " << ip << " Port: " << port;
+		ss << "Could not create socket, please check the parameters provided: Interface: " << interface << " IP: " << ip << " Port: " << port << " VLAN: " << vlan;
 		LOG_ERROR(SocketReader, ss.str());
 		throw BadParameterError(ss.str());
 	}
+	LOG_INFO(SocketReader, "Set connection interface: " << interface << " IP: " << ip << " Port: " << port << " VLAN: " << vlan);
+	m_interface = interface;
 }
 
 /**
@@ -312,7 +310,7 @@ bool SocketReader::setSocketBlockingEnabled(int fd, bool blocking)
 }
 
 /**
- * Runs throught he list of received messages and confirms that they all came from
+ * Runs through the list of received messages and confirms that they all came from
  * the expected host address. The expected host address is initially empty and set
  * on the first call to this method to the host address of the first packet received.
  * In the event that we are receiving packets from multiple hosts, a warning is printed.
@@ -337,27 +335,29 @@ void SocketReader::confirmSingleHost(struct mmsghdr msgs[], size_t len) {
 }
 
 /**
- * Selects a network interface that has a route for the IP address passed in as an
- * argument. If no IP is specified, 224.0.0.0 is used to select the default multicast
- * route. The class member variable m_interface is updated with the selected interface,
- * but this only affects future connections. An existing connection will be unchanged.
+ * Selects a network interface that has a route for the multicast group passed in as
+ * ac argument. If no multicast group is specified, 224.0.0.0 is used to select the
+ * default multicast route. If no other routes match, the interface with the default
+ * gateway will be selected. The selected interface is returned.
  */
-void SocketReader::getInterfaceFromRoutes(std::string ip) {
-	// Destination: 224.0.0.0 (000000E0) and Genmask: 240.0.0.0 (000000F0)
+std::string SocketReader::getMcastIfaceFromRoutes(std::string group) {
 
 	FILE* fp;
 	char buffer[1024*1024];  // Too big?
 	size_t bytes_read;
-	char* match;
-	char* line;
+	std::stringstream routes;
+	std::string iface, trash, iface_match = "";
+	in_addr_t dest, mask, mask_match = 0;
 
+	// Convert group to hex representation
+	in_addr_t group_hex = inet_addr(group.c_str());
 
 	// Read the entire contents of /proc/net/route into the buffer.
 	// Expects format: Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask ...
 	fp = fopen ("/proc/net/route", "r");
 	if (fp == NULL) {
 		RH_NL_WARN("SourceSDDSUtils", "Failed to open /proc/net/route");
-		return;
+		return "";
 	}
 	bytes_read = fread (buffer, 1, sizeof (buffer), fp);
 	fclose (fp);
@@ -365,41 +365,34 @@ void SocketReader::getInterfaceFromRoutes(std::string ip) {
 	/* Bail if read failed.  */
 	if (bytes_read == 0) {
 		RH_NL_WARN("SourceSDDSUtils", "Failed to read /proc/net/route");
-		return;
+		return "";
 	}
 
-	/* NULL-terminate the text.  */
-	if (bytes_read == sizeof (buffer) )
-		buffer[bytes_read-1] = '\0';
-	else
-		buffer[bytes_read] = '\0';
+	// write to stringstream
+	routes.write(buffer, bytes_read);
+	RH_NL_DEBUG("SourceSDDSUtils", "Routes: ["<<routes.str()<<"]");
 
-	/* Locate the position of the desired ip  */
-	in_addr_t ip_add = inet_addr(ip.c_str());
-	std::stringstream ss;
-	ss << std::uppercase << std::hex << std::setfill('0') << std::setw(8) << ip_add;
+    // Parse the results, using format below:
+	//	Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
+	//	em2		000000E0	00000000	0001	0		0	0		000000F0	0	0		0 ## This is the default multicast route
+	//	em2		0067A8EA	00000000	0001	0		0	0		00FFFFFF	0	0		0 ## This is a class C multicast route
+	//	em4		0068A8EA	00000000	0001	0		0	0		00FFFFFF	0	0		0 ## This is another class C mcast route
+	// logic: bool match = (<Destination> == (inet_addr(ip.c_str()) & <Mask>))
+	// And matches with greater mask take priority
 
-	// Quit now if no occurrence of IP
-	match = strstr (buffer, ss.str().c_str());
-	if (match == NULL) {
-		RH_NL_WARN("SourceSDDSUtils", "In parsing /proc/net/route the IP "<<ip<<" was not found.");
-		return;
+	routes.ignore(bytes_read, '\n'); // skip title row
+	for (routes >> iface; !routes.eof(); routes >> iface ){
+		routes >> std::hex >> dest >> trash >> trash >> trash >> trash >> trash >> mask;
+	    RH_NL_DEBUG("SourceSDDSUtils", "iface="<<iface
+	    		<<"  dest=0x"<<std::hex<<std::setw(8)<<std::setfill('0')<<std::uppercase<<dest<<std::nouppercase
+				<<"  mask=0x"<<std::hex<<std::setw(8)<<std::setfill('0')<<std::uppercase<<mask<<std::nouppercase);
+		if (mask >= mask_match && (dest == (group_hex & mask))) {
+			RH_NL_DEBUG("SourceSDDSUtils", "Found match: iface="<<iface);
+			iface_match = iface;
+            mask_match = mask;
+		}
+		routes.ignore(bytes_read, '\n'); // skip remainder of row
 	}
-
-	// else, null terminate at match and find beginning of line to grab iface
-	*match = '\0';
-	line = strrchr(buffer, '\n');
-	if (line == NULL) {
-		line = &match[0];
-	} else {
-		line++;
-	}
-
-	// Grab iface
-	ss.str("");
-	ss.clear();
-	ss << line;
-	ss >> m_interface;
-
-	RH_NL_DEBUG("SourceSDDSUtils", "Determined "<<m_interface<<" is used to route "<<ip<<" using /proc/net/route");
+	RH_NL_DEBUG("SourceSDDSUtils", "Determined "<<iface_match<<" is used to route "<<group<<" using /proc/net/route");
+	return iface_match;
 }

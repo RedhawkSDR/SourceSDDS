@@ -67,7 +67,7 @@ private:
     unicast_t m_unicast_connection;
     std::string m_interface;
     void confirmSingleHost(struct mmsghdr msgs[], size_t len);
-    void getInterfaceFromRoutes(std::string ip="224.0.0.0");
+    std::string getMcastIfaceFromRoutes(std::string group="224.0.0.0");
 
 };
 

@@ -19,7 +19,7 @@ You should have received a copy of the GNU Lesser General Public License along
 with this program.  If not, see http://www.gnu.org/licenses/.
 -->
 <!DOCTYPE softpkg PUBLIC "-//JTRS//DTD SCA V2.2.2 SPD//EN" "softpkg.dtd">
-<softpkg id="DCE:5863ddf7-f149-4988-b7d2-e0c8f40b1ef2" name="rh.SourceSDDS" type="2.0.4" version="1.1.0">
+<softpkg id="DCE:5863ddf7-f149-4988-b7d2-e0c8f40b1ef2" name="rh.SourceSDDS" type="2.0.4" version="1.1.1">
   <title></title>
   <author>
     <name>null</name>

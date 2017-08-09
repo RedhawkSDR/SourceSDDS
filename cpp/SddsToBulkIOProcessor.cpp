@@ -47,6 +47,15 @@ SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bu
 	m_sri.streamID = "DEFAULT_SDDS_STREAM_ID";
 	m_sri.xdelta = -1;
 	m_sri.mode = -1;
+	m_sri.hversion = 0;
+	m_sri.xstart= 0;
+	m_sri.xunits= 0;
+	m_sri.subsize= 0;
+	m_sri.ystart= 0;
+	m_sri.ydelta= 0;
+	m_sri.yunits= 0;
+	m_sri.blocking= false;
+
 
 	m_start_of_year = getStartOfYear();
 }

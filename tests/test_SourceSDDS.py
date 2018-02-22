@@ -1158,7 +1158,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.connect(sink, providesPortName='shortIn')
         
         # Here we are using the BULKIO SRI with a modified xdelta and complex flag.
+        # Adding other keywords to ensure they are passed through correctly
         kw=[CF.DataType("BULKIO_SRI_PRIORITY", ossie.properties.to_tc_value(1, 'long'))]
+        kw.append(CF.DataType("Test_Keyword_string", ossie.properties.to_tc_value('test', 'string')))
+        kw.append(CF.DataType("Test_Keyword_long", ossie.properties.to_tc_value(10, 'long')))
+        kw.append(CF.DataType("COL_RF", ossie.properties.to_tc_value(100000000, 'double')))
         sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.234e-9, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID', blocking=False, keywords=kw)
         self.setupComponent(sri=sri)
         
@@ -1178,9 +1182,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         sri_rx = sink.sri()
         
         # compareSRI does not work for CF.DataType with keywords so we check those first then zero them out
-        self.assertEqual(sri.keywords[0].id, sri_rx.keywords[0].id, "SRI Keyword ID do not match")
-        self.assertEqual(sri.keywords[0].value.value(), sri_rx.keywords[0].value.value(), "SRI Keyword Value do not match")
-        self.assertEqual(sri.keywords[0].value.typecode(), sri_rx.keywords[0].value.typecode(), "SRI Keyword Type codes do not match")
+        for index,keyword in enumerate(sri.keywords):
+            self.assertEqual(keyword.id, sri_rx.keywords[index].id, "SRI Keyword ID do not match")
+            self.assertEqual(keyword.value.value(), sri_rx.keywords[index].value.value(), "SRI Keyword Value do not match")
+            self.assertEqual(keyword.value.typecode(), sri_rx.keywords[index].value.typecode(), "SRI Keyword Type codes do not match")
+
         sri.keywords = []
         sri_rx.keywords = []
         self.assertTrue(compareSRI(sri, sri_rx), "Attach SRI does not match received SRI")

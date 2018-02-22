@@ -24,6 +24,7 @@ with this program.  If not, see http://www.gnu.org/licenses/.
   <author>
     <name>null</name>
   </author>
+  <description>The rh.SourceSDDS will consume a single SDDS formatted multicast or unicast UDP stream and output it via the cooresponding bulkIO port. The component provides a number of status properties including buffer montioring of both kernel space socket and internal component buffers. Source IP and port information may either be expressed via the attachment override property or via the bulkIO SDDS ports attach call. </description>
   <propertyfile type="PRF">
     <localfile name="SourceSDDS.prf.xml"/>
   </propertyfile>

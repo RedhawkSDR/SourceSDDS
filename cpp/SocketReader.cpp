@@ -259,7 +259,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 
 			// Its possible that you have two different hosts sending multicast to the same address. This feature was added to
 			// aid in debugging situations where you want to know who is missconfigured.
-			if (confirmHosts) {
+			if (__builtin_expect(confirmHosts,false)) {
 				confirmSingleHost(msgs, (size_t) pktsReadThisPass);
 			}
 			break;

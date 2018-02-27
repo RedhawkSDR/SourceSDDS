@@ -1089,7 +1089,88 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             time_ns = time_ns + 512*xdelta_ns
             
         self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
+        
+    def testNonConformingConformingSwitch(self):
+        self.setupComponent()
+        
+        # Get ports
+        compDataShortOut_out = self.comp.getPort('dataShortOut')
+        compDataSddsIn = self.comp.getPort('dataSddsIn')
+        
+        sink = sb.DataSink()
+        
+        # Connect components
+        self.comp.connect(sink, providesPortName='shortIn')
+            
+        # Start components
+        self.comp.start()
+        sink.start()
+        
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        pktNum = 0
+        
+        sr=1e6
+        xdelta_ns=int(1/(sr*2) * 1e9)
+        time_ns=0
+        
+        recSRI = False
+        # No time slips here
+        while pktNum < 100:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4), CX=1)
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ns = time_ns + 512*xdelta_ns
+            
+        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
+        
+        # Stop the component, detach, then re-attach a new stream that is using the conforming sampleRate
+        self.comp.stop()
+        
+        compDataSddsIn.detach(self.attachId)
+        
+        kw = [CF.DataType("dataRef", ossie.properties.to_tc_value(BIG_ENDIAN, 'long'))]
+        sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.0, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='TestStreamID2', blocking=False, keywords=kw)
+            
+        compDataSddsIn.pushSRI(sri,timestamp.now())  
+        
+        streamDef = BULKIO.SDDSStreamDefinition('id2', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
+        self.attachId = compDataSddsIn.attach(streamDef, 'test') 
 
+        self.comp.start()
+        # Create data
+        fakeData = [x for x in range(0, 512)]
+        pktNum = 0
+        
+        sr=1e6
+        xdelta_ns=int(1/(sr) * 1e9)
+        time_ns=0
+        
+        recSRI = False
+        # No time slips here
+        while pktNum < 100:
+            # Create data
+            h = Sdds.SddsHeader(pktNum, FREQ=(sr*73786976294.838211), TT=(time_ns*4), CX=1)
+            p = Sdds.SddsShortPacket(h.header, fakeData)
+            p.encode()
+            self.userver.send(p.encodedPacket)
+            pktNum = pktNum + 1
+            
+            if pktNum != 0 and pktNum % 32 == 31:
+                pktNum = pktNum + 1
+                
+            time_ns = time_ns + 512*xdelta_ns
+            
+        self.assertEqual(self.comp.status.time_slips, 0, "There should be no time slips!")
+        
+        
     def testBulkIOTiming(self):
         self.setupComponent()
         

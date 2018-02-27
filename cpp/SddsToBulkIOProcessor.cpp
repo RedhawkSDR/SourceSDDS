@@ -159,8 +159,11 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	pktbuffer->recycle_buffers(pktsToProcess);
 	pktbuffer->recycle_buffers(pktsToRecycle);
 
+	// Reseting flags for next time the run command is called.
 	m_running = false;
 	m_first_packet = true;
+	m_non_conforming_device = false;
+	LOG_DEBUG(SddsToBulkIOProcessor, "Reseting first-packet and non-conforming flag in SDDSTOBULKIO Processor.")
 }
 
 /**

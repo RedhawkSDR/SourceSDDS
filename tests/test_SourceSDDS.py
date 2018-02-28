@@ -42,7 +42,7 @@ import subprocess, signal, os
 
 LITTLE_ENDIAN=1234
 BIG_ENDIAN=4321
-DEBUG_LEVEL=0
+DEBUG_LEVEL=3
 
 sb.release = getattr(sb,'release',sb.domainless._cleanUpLaunchedComponents)
 
@@ -104,8 +104,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         #######################################################################
         # Verify the basic state of the component
         self.assertNotEqual(self.comp, None)
-        self.assertEqual(self.comp_obj._non_existent(), False)
-        self.assertEqual(self.comp_obj._is_a("IDL:CF/Resource:1.0"), True)
+        self.assertEqual(self.comp.ref._non_existent(), False)
+        self.assertEqual(self.comp.ref._is_a("IDL:CF/Resource:1.0"), True)
 
         #######################################################################
         # Validate that query returns all expected parameters
@@ -151,14 +151,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataOctetOut_out = self.comp.getPort('dataOctetOut')
 
-        # Set properties
-        sink = sb.DataSink()
         # Connect components
-        self.comp.connect(sink, providesPortName='octetIn')
+        self.comp.connect(self.sink, providesPortName='octetIn')
 
         # Start components
         self.comp.start()
-        sink.start()
 
         # Create data
         fakeData = [x % 256 for x in range(1024)]
@@ -173,7 +170,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         time.sleep(1)
         
         # Get data
-        data = sink.getData()
+        data,stream = self.getData()
         
         # Validate correct amount of data was received
         self.assertEqual(len(data), 1024)
@@ -181,7 +178,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(data[:256], list(struct.pack('256B', *fakeData[:256])))
         self.assertEqual(self.comp.status.dropped_packets, 0)
         
-        sink.stop()
         
     def testUnicastAttachSuccess(self):
         """Attaches to the dataSddsIn port 10 times making sure that it occurs successfully each time"""
@@ -211,14 +207,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataFloatOut_out = self.comp.getPort('dataShortOut')
         
-        sink = sb.DataSink()
  
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
 
         # Start components
         self.comp.start()
-        sink.start()
         
         compDataSddsIn = self.comp.getPort('dataSddsIn')
 
@@ -258,14 +252,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataFloatOut_out = self.comp.getPort('dataShortOut')
         
-        sink = sb.DataSink()
  
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.self.sink, providesPortName='shortIn')
 
         # Start components
         self.comp.start()
-        sink.start()
         
         compDataSddsIn = self.comp.getPort('dataSddsIn')
 
@@ -305,14 +297,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataFloatOut_out = self.comp.getPort('dataShortOut')
         
-        sink = sb.DataSink()
- 
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
 
         # Start components
         self.comp.start()
-        sink.start()
         
         compDataSddsIn = self.comp.getPort('dataSddsIn')
 
@@ -367,15 +356,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get ports
         compDataFloatOut_out = self.comp.getPort('dataShortOut')
-        
-        sink = sb.DataSink()
  
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
 
         # Start components
         self.comp.start()
-        sink.start()
         
         compDataSddsIn = self.comp.getPort('dataSddsIn')
 
@@ -442,15 +428,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         self.setupComponent()
         
-        # Get ports
-        sink = sb.DataSink()
-        
         # Connect components
-        self.comp.connect(sink, providesPortName='octetIn')
+        self.comp.connect(self.sink, providesPortName='octetIn')
         
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x % 256 for x in range(1024)]
@@ -479,7 +461,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(len(data), 2095104)
         self.assertEqual(self.comp.status.dropped_packets, 0)
         
-        sink.stop()
         
 
     def testUnicastOctetPort(self):
@@ -490,14 +471,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataOctetOut_out = self.comp.getPort('dataOctetOut')
 
-        # Set properties
-        sink = sb.DataSink()
         # Connect components
-        self.comp.connect(sink, providesPortName='octetIn')
+        self.comp.connect(self.sink, providesPortName='octetIn')
 
         # Start components
         self.comp.start()
-        sink.start()
 
         # Create data
         fakeData = [x % 256 for x in range(1024)]
@@ -520,7 +498,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(data[:256], list(struct.pack('256B', *fakeData[:256])))
         self.assertEqual(self.comp.status.dropped_packets, 0)
         
-        sink.stop()
         
 
     def testUnicastFloatPort(self):
@@ -530,15 +507,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get ports
         compDataFloatOut_out = self.comp.getPort('dataFloatOut')
-        
-        sink = sb.DataSink()
  
         # Connect components
-        self.comp.connect(sink, providesPortName='floatIn')
+        self.comp.connect(self.sink, providesPortName='floatIn')
         
         #Start components.
         self.comp.start()
-        sink.start()
 
         # Create data
         fakeData = [float(x) for x in range(0, 256)]
@@ -561,22 +535,18 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Validate data is correct
         self.assertEqual(fakeData, list(struct.unpack('256f', struct.pack('<256f', *data))))
         self.assertEqual(self.comp.status.dropped_packets, 0)
-        
-        sink.stop()
-        
+
     def testXDeltaChange(self):
         self.setupComponent()
         
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
-
-        sink = sb.DataSink()
+        
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
             
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -612,14 +582,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
-        sink = sb.DataSink()
 
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
         
         # Start components
         self.comp.start()
-        sink.start()
 
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -641,9 +609,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         # Validate data is correct        
         self.assertEqual(fakeData, list(struct.unpack('>512H', struct.pack('>512H', *data))))
-        
-        sink.stop()
-        
+
 
     def testUnicastCxBit(self):
         
@@ -652,14 +618,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
         
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -675,8 +638,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Validate sri mode is correct
         self.assertEqual(sink.sri().mode, 1)
-        
-        sink.stop()
 
     def testUnicastBadFsn(self):
 
@@ -684,15 +645,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
-
-        sink = sb.DataSink()
         
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
         
         # Start components
         self.comp.start()
-        sink.start()
 
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -714,8 +672,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(len(data), 1024)
         self.assertEqual(2*fakeData, list(struct.unpack('>1024H', struct.pack('>1024H', *data[:]))))
         self.assertEqual(self.comp.status.dropped_packets, 65535)
-        sink.stop()
-
 
     def testBufferSizeAdjustment(self):
         self.setupComponent()
@@ -757,16 +713,13 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         compDataShortOut_out = self.comp.getPort('dataShortOut')
         sdds_pkts_per_push = (1, 2, 4, 8, 16, 32, 64)
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
 
         for pkts_per_push in sdds_pkts_per_push:
             self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = pkts_per_push
             # Start components
             self.comp.start()
-            sink.start()
             data = sink.getData()
             num_sends = 0
             
@@ -788,9 +741,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             # Validate correct amount of data was received
             self.assertEqual(len(data), pkts_per_push * 512)
             self.comp.stop()
-            sink.stop()
-         
-         
+
     def testPushOnTTV(self):
         '''
         Push on TTV will send the packet out if the TTV flag changes
@@ -802,14 +753,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         self.comp.advanced_configuration.push_on_ttv = True
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
 
         # Start components
         self.comp.start()
-        sink.start()
         ttv = 0
         pktNum = 0
         num_changes = 0
@@ -837,7 +785,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(num_changes - 1, len(data[1]), "The number of bulkIO pushes (" + str(len(data[1])) + ") does not match the expected (" + str(num_changes-1) + ").")
             
         self.comp.stop()
-        sink.stop()
 
     def testWaitOnTTV(self):
         '''
@@ -850,14 +797,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         self.comp.advanced_configuration.wait_on_ttv = True
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
         
         # Start components
         self.comp.start()
-        sink.start()
         ttv = 0
         pktNum = 0
         num_changes = 0
@@ -885,7 +829,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.assertEqual(num_changes/2, len(data[1]), "The number of bulkIO pushes (" + str(len(data[1])) + ") does not match the expected (" + str(num_changes/2) + ").")
             
         self.comp.stop()
-        sink.stop()        
     
     def testShortBigEndianness(self):
         self.setupComponent(endianness=BIG_ENDIAN)
@@ -893,14 +836,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
 
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -921,14 +861,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
         
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -1056,14 +993,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
-        sink = sb.DataSink()
         
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
             
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -1097,14 +1032,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         compDataShortOut_out = self.comp.getPort('dataShortOut')
         compDataSddsIn = self.comp.getPort('dataSddsIn')
         
-        sink = sb.DataSink()
-        
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
             
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -1176,14 +1108,12 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
-
-        sink = sb.DataSink()
+        
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
             
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -1233,10 +1163,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
         
         # Here we are using the BULKIO SRI with a modified xdelta and complex flag.
         # Adding other keywords to ensure they are passed through correctly
@@ -1249,7 +1177,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -1276,10 +1203,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Get ports
         compDataShortOut_out = self.comp.getPort('dataShortOut')
 
-        sink = sb.DataSink()
-
         # Connect components
-        self.comp.connect(sink, providesPortName='shortIn')
+        self.comp.connect(self.sink, providesPortName='shortIn')
         
         # Here we are using the BULKIO SRI with a modified xdelta and complex flag but the sdds xdelta and cx should merge in
         sri = BULKIO.StreamSRI(hversion=1, xstart=0.0, xdelta=1.234e-9, xunits=1, subsize=0, ystart=0.0, ydelta=0.0, yunits=0, mode=0, streamID='StreamID1234', blocking=False, keywords=[])
@@ -1287,7 +1212,6 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             
         # Start components
         self.comp.start()
-        sink.start()
         
         # Create data
         fakeData = [x for x in range(0, 512)]
@@ -1388,21 +1312,35 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         self.assertTrue(attachId == 'shouldFail', "Second attach on port should cause a failure!")
 
+    def getData(self):
+        
+        out = []
+        count=0
+        while True:
+            stream = self.sink.getCurrentStream(5)
+            dataBlock = None
+            if stream:
+                dataBlock = stream.read()
+            else:
+                return None,None
+            if dataBlock:    
+                newOut = dataBlock.data()
+                out.extend(newOut)
+                count=0
+            elif stream.eos():
+                break
+            elif count==100:
+                break
+            time.sleep(.01)
+            count+=1
+        return out,stream
+
     def setUp(self):
         print "\nRunning test:", self.id()
         ossie.utils.testing.ScaComponentTestCase.setUp(self)
-
-        #Launch the component with the default execparams.
-        execparams = self.getPropertySet(kinds = ("execparam",), modes = ("readwrite", "writeonly"), includeNil = False)
-        execparams = dict([(x.id, any.from_any(x.value)) for x in execparams])
-        execparams["DEBUG_LEVEL"] = DEBUG_LEVEL # Disable logging, lots of the tests will cause WARN and error as we test conditions.
-        self.launch(execparams)
-
-        #Simulate regular component startup.
-        #Verify that initialize nor configure throw errors.
-        self.comp.initialize()
-        configureProps = self.getPropertySet(kinds = ("configure",), modes = ("readwrite", "writeonly"), includeNil = False)
-        self.comp.configure(configureProps)
+        
+        execparams = {"DEBUG_LEVEL" : DEBUG_LEVEL}
+        self.comp = sb.launch(self.spd_file, impl=self.impl,execparams=execparams)
 
 		#Configure multicast properties
         self.comp.buffer_size = 200000  # cannot alter this except in base class loadProperties (requires recompile)
@@ -1412,6 +1350,9 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.multi_ip = '236.0.10.1'
         self.mserver = multicast.multicast_server(self.multi_ip, self.port)
         self.userver = unicast.unicast_server(self.uni_ip, self.port)
+        
+        self.sink = sb.DataSink()
+        self.sink.start()
 
     def tearDown(self):
         #Tear down the rest of the object.

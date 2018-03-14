@@ -20,6 +20,7 @@
 AC_INIT(rh.SourceSDDS, 1.2.0)
 AM_INIT_AUTOMAKE([nostdinc foreign])
 AC_CONFIG_MACRO_DIR([m4])
+LT_INIT([dlopen])
 
 AC_PROG_CC
 AC_PROG_CXX

@@ -101,7 +101,6 @@ private:
 
 	void processPackets(std::deque<SddsPacketPtr> &pktsToWork, std::deque<SddsPacketPtr> &pktsToRecycle);
 	bool orderIsValid(SddsPacketPtr &pkt);
-	void pushPacket(bool eos);
 	void pushSri();
 	void checkForTimeSlip(SddsPacketPtr &pkt);
 	void updateExpectedXdelta(double rate, bool complex);

@@ -382,45 +382,31 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			// Check for time slips
 			checkForTimeSlip(pkt);
 
-			// Did some quick testing to see if an insert or a resize + memcopy was faster, insert FTW.
-			//I wasn't sure if sizeof(pkt->d) would work but it does return 1024.
-			//m_bulkIO_data.insert(m_bulkIO_data.end(), pkt->d, pkt->d + sizeof(pkt->d));
+			// Grab data from packet and write it to BULKIO stream. Based on the type of data in the packet write it to the correct stream type.
 			switch(m_bps) {
 			case 8: {
-				// Push initial SRI?
-		        redhawk::buffer<unsigned char> dataBufferOctet(1024);
-		        std::copy(&pkt->d[0],&pkt->d[1024],dataBufferOctet.data());
-				octetStream.write(dataBufferOctet,m_bulkio_time_stamp);
+		        octetStream.write(&pkt->d[0],1024,m_bulkio_time_stamp);
 				break;
 			}
 			case 16: {
-				// Create a REDHAWK Buffer and copy the data from the SDDS packet into it.
-		        //redhawk::buffer<short> dataBufferShort(1024/2);
-		        redhawk::buffer<unsigned char> dataBufferOctet(1024);
-		        std::copy(&pkt->d[0],&pkt->d[1024],dataBufferOctet.data());
-
-				// Ugh, we need to byte swap. At least there is a nice builtin for swapping bytes for shorts.
+				// We need to byte swap. At least there is a nice builtin for swapping bytes for shorts.
 				if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
-					swab(dataBufferOctet.data(), dataBufferOctet.data(), dataBufferOctet.size());
+					swab(&pkt->d[0], &pkt->d[0], 1024);
 				}
-				redhawk::buffer<short> dataBufferShort = redhawk::buffer<short>::recast(dataBufferOctet);
-				shortStream.write(dataBufferShort,m_bulkio_time_stamp);
+
+				shortStream.write((short*)&pkt->d[0],512,m_bulkio_time_stamp);
 				break;
 			}
 			case 32: {
-		        redhawk::buffer<unsigned char> dataBufferOctet(1024);
-		        std::copy(&pkt->d[0],&pkt->d[1024],dataBufferOctet.data());
-
-				// Ugh, we need to byte swap and for floats there is no nice method for us to use like there is for shorts. Time to iterate.
+				// We need to byte swap and for floats there is no nice method for us to use like there is for shorts. Time to iterate.
 				if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
-					uint32_t *buf = reinterpret_cast<uint32_t*>(dataBufferOctet.data());
-					for (size_t i = 0; i < dataBufferOctet.size() / sizeof(float); ++i) {
+					uint32_t *buf = reinterpret_cast<uint32_t*>(&pkt->d[0]);
+					for (size_t i = 0; i < 1024 / sizeof(float); ++i) {
 						buf[i] = __builtin_bswap32(buf[i]);
 					}
 				}
 
-				redhawk::buffer<float> dataBufferFloat = redhawk::buffer<float>::recast(dataBufferOctet);
-				floatStream.write(dataBufferFloat,m_bulkio_time_stamp);
+				floatStream.write((float*)&pkt->d[0],256,m_bulkio_time_stamp);
 				break;
 			}
 			default:{
@@ -442,10 +428,6 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
 				m_expected_seq_number++;
 
-//			// We've worked through the full stack of packets, push the data and clear the buffer
-//			if (pkt_it == pktsToWork.end()) {
-//				pushPacket(false);
-//				m_bulkIO_data.clear();
 		}
 	}
 }
@@ -471,59 +453,6 @@ void SddsToBulkIOProcessor::pushSri() {
 		break;
 	}
 
-}
-
-/**
- * Pushes bulkIO and possibly an SRI packet if SRI has never been sent to that port.
- * Will also clear the m_bulkIO_data vector.
- */
-//TODO: Do we ever need to push an EOS flag?
-void SddsToBulkIOProcessor::pushPacket(bool eos) {
-	if (m_bulkIO_data.size() == 0 and !eos) {
-		return;
-	}
-
-	switch(m_bps) {
-	case 8:
-		if (m_octet_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
-			m_octet_out->pushSRI(m_sri);
-		}
-
-		m_octet_out->pushPacket(m_bulkIO_data, m_bulkio_time_stamp, eos, m_sri.streamID.in());
-		break;
-	case 16:
-		if (m_short_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
-			m_short_out->pushSRI(m_sri);
-		}
-
-		// Ugh, we need to byte swap. At least there is a nice builtin for swapping bytes for shorts.
-		if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
-			swab(&m_bulkIO_data[0], &m_bulkIO_data[0], m_bulkIO_data.size());
-		}
-
-		m_short_out->pushPacket(reinterpret_cast<short*> (&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(short), m_bulkio_time_stamp, eos, m_sri.streamID.in());
-		break;
-	case 32:
-		if (m_float_out->getCurrentSRI().count(m_sri.streamID.in())==0) {
-			m_float_out->pushSRI(m_sri);
-		}
-
-		// Ugh, we need to byte swap and for floats there is no nice method for us to use like there is for shorts. Time to iterate.
-		if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
-			uint32_t *buf = reinterpret_cast<uint32_t*>(&m_bulkIO_data[0]);
-			for (size_t i = 0; i < m_bulkIO_data.size() / sizeof(float); ++i) {
-				buf[i] = __builtin_bswap32(buf[i]);
-			}
-		}
-
-		m_float_out->pushPacket(reinterpret_cast<float*>(&m_bulkIO_data[0]), m_bulkIO_data.size()/sizeof(float), m_bulkio_time_stamp, eos, m_sri.streamID.in());
-		break;
-	default:
-		LOG_ERROR(SddsToBulkIOProcessor, "Could not push packet, the bits per sample are non-standard and set to: " << m_bps);
-		break;
-	}
-
-	m_bulkIO_data.clear();
 }
 
 void SddsToBulkIOProcessor::createOutputStreams() {

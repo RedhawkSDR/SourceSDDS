@@ -25,8 +25,10 @@ import socket
 import struct
 import sys
 import time
+import copy
 from omniORB import any, CORBA
 from bulkio.bulkioInterfaces import BULKIO, BULKIO__POA
+import bulkio
 from ossie.utils.bulkio import bulkio_helpers
 import multicast
 import unicast
@@ -42,7 +44,7 @@ import subprocess, signal, os
 
 LITTLE_ENDIAN=1234
 BIG_ENDIAN=4321
-DEBUG_LEVEL=3
+DEBUG_LEVEL=5
 
 sb.release = getattr(sb,'release',sb.domainless._cleanUpLaunchedComponents)
 
@@ -50,7 +52,6 @@ sb.release = getattr(sb,'release',sb.domainless._cleanUpLaunchedComponents)
 # - Started with no attach or override then attachment override set true
 # - Started with no attach or override then attach comes in
 # - Started with attachment override then attachment override occurs etc.
-
 
 class UTC(datetime.tzinfo):
     """UTC"""
@@ -175,7 +176,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Validate correct amount of data was received
         self.assertEqual(len(data), 1024)
         # Validate data is correct
-        self.assertEqual(data[:256], list(struct.pack('256B', *fakeData[:256])))
+        self.assertEqual([chr(i) for i in data[:256]], list(struct.pack('256B', *fakeData[:256])))
         self.assertEqual(self.comp.status.dropped_packets, 0)
         
         
@@ -226,7 +227,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.userver.send(p.encodedPacket)
 
         # Wait for data to be received
-        time.sleep(1)
+        time.sleep(3)
         
         # Get data
         data,stream = self.getData()
@@ -241,8 +242,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         #Send Detach
         compDataSddsIn.detach(self.attachId )
         time.sleep(1)
+        
+        # Get data
+        data,stream = self.getData()
                  
-        self.assertTrue(stream.eos())
+        self.assertTrue(stream.eos)
 
     def testEOSonStop(self):
         """Checks that an EOS is sent on Stop """
@@ -285,8 +289,10 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.stop()
         
         time.sleep(1)
+        # Get data
+        data,stream = self.getData()
                
-        self.assertTrue(stream.eos())
+        self.assertTrue(stream.eos)
 
     def testRestart(self):
         """Checks that an Component will run after being stopped without a new attach """
@@ -328,8 +334,10 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.comp.stop()
         
         time.sleep(1)
+        # Get data
+        data,stream = self.getData()
          
-        self.assertTrue(stream.eos())
+        self.assertTrue(stream.eos)
         
         #Restart Component and send more data
         self.comp.start()
@@ -387,8 +395,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         #Send Detach
         compDataSddsIn.detach(self.attachId )
         time.sleep(1)
+        
+        # Get data
+        data,stream = self.getData()
                 
-        self.assertTrue(stream.eos())
+        self.assertTrue(stream.eos)
         
         #Re-Attach
         streamDef = BULKIO.SDDSStreamDefinition('id', BULKIO.SDDS_SI, self.uni_ip, 0, self.port, 8000, True, 'testing')
@@ -426,7 +437,8 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         
         # Connect components
         self.comp.connect(self.sink, providesPortName='octetIn')
-        
+        self.sink.port.setMaxQueueDepth(2500)
+
         # Start components
         self.comp.start()
         
@@ -452,6 +464,17 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Wait for data to be received
         time.sleep(3)
         data,stream = self.getData()
+        
+        #data = self.sink.getData()
+
+        
+        #packet = snk.getPacket()
+        
+        #print "Got a packet " , len(packet.dataBuffer), packet.T
+
+        #print "Max Queue Depth " ,snk.getMaxQueueDepth()
+        #print dir(snk.port)
+        
 
         # Validate correct amount of data was received
         self.assertEqual(len(data), 2095104)
@@ -491,7 +514,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         # Validate correct amount of data was received
         self.assertEqual(len(data), 1024)
         # Validate data is correct
-        self.assertEqual(data[:256], list(struct.pack('256B', *fakeData[:256])))
+        self.assertEqual([chr(i) for i in data[:256]], list(struct.pack('256B', *fakeData[:256])))
         self.assertEqual(self.comp.status.dropped_packets, 0)
         
         
@@ -635,7 +658,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         data,stream = self.getData()
         
         # Validate sri mode is correct
-        self.assertEqual(stream.sri().mode, 1)
+        self.assertEqual(stream.sri.mode, 1)
 
     def testUnicastBadFsn(self):
 
@@ -715,18 +738,18 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
 
         for pkts_per_push in sdds_pkts_per_push:
             self.comp.advanced_optimizations.sdds_pkts_per_bulkio_push = pkts_per_push
-            
-            self.sink = sb.DataSink()
-            # Connect components
-            self.comp.connect(self.sink, providesPortName='shortIn')
-            
+
             # Start components
             self.comp.start()
 
             num_sends = 0
             data = []
             
-            while (len(data) == 0 and num_sends < 2*max(sdds_pkts_per_push)):
+
+            sink = sb.StreamSink()
+            self.comp.connect(sink, providesPortName='shortIn')
+            
+            while (not(data) and num_sends < 3*max(sdds_pkts_per_push)):
                 # Create data
                 fakeData = [x for x in range(0, 512)]
                 h = Sdds.SddsHeader(num_sends)
@@ -737,12 +760,11 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
                 if num_sends != 0 and num_sends % 32 == 31:
                     num_sends = num_sends + 1
                     
-                time.sleep(0.05)
-                # Get data
-                stream = self.sink.getCurrentStream(.01)
-                if stream:
-                    data,stream = self.getData()
-            
+                time.sleep(0.05)               
+                packet = sink.port.getPacket()
+                if packet.dataBuffer:
+                    data = packet.dataBuffer
+
             # Validate correct amount of data was received
             self.assertEqual(len(data), pkts_per_push * 512)
             self.comp.stop()
@@ -1191,13 +1213,13 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.userver.send(p.encodedPacket)
         time.sleep(0.05)
         data,stream = self.getData()
-        sri_rx = stream.sri()
+        sri_rx = stream.sri
         
         # compareSRI does not work for CF.DataType with keywords so we check those first then zero them out
         for index,keyword in enumerate(sri.keywords):
             self.assertEqual(keyword.id, sri_rx.keywords[index].id, "SRI Keyword ID do not match")
             self.assertEqual(keyword.value.value(), sri_rx.keywords[index].value.value(), "SRI Keyword Value do not match")
-            self.assertEqual(keyword.value.typecode(), sri_rx.keywords[index].value.typecode(), "SRI Keyword Type codes do not match")
+            self.assertEqual(keyword.value.typecode().kind(), sri_rx.keywords[index].value.typecode().kind(), "SRI Keyword Type codes do not match")
 
         sri.keywords = []
         sri_rx.keywords = []
@@ -1226,7 +1248,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.userver.send(p.encodedPacket)
         time.sleep(0.05)
         data,stream = self.getData()
-        sri_rx = stream.sri()
+        sri_rx = stream.sri
         
         self.assertNotEqual(sri_rx.mode, sri.mode, "SDDS Packet Mode should have overridden the supplied SRI")
         self.assertNotEqual(sri_rx.xdelta, sri.xdelta, "SDDS Packet xdelta should have overridden the supplied SRI")
@@ -1321,22 +1343,19 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         out = []
         tstamps = []
         count=0
-        stream = self.sink.getCurrentStream(5)
-        if not stream:
-            print "Did not get data stream"
-            return None,None
+        stream = None
             
         while True:
-            dataBlock = None
-            dataBlock = stream.read(blocking=False)
-
-            if dataBlock:    
-                newOut = dataBlock.data()
-                tstamps.extend(dataBlock.getTimestamps())
+            streamdata = None          
+            streamdata = self.sink.read(timeout=0)
+            if streamdata:    
+                newOut = streamdata.data
+                tstamps.extend(streamdata.timestamps)
                 out.extend(newOut)
                 count=0
-            elif stream.eos():
-                break
+                stream = copy.copy(streamdata)
+                if streamdata.eos:
+                    break
             elif count==100:
                 break
             time.sleep(.01)
@@ -1362,7 +1381,7 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
         self.mserver = multicast.multicast_server(self.multi_ip, self.port)
         self.userver = unicast.unicast_server(self.uni_ip, self.port)
         
-        self.sink = sb.DataSink()
+        self.sink = sb.StreamSink()
         self.sink.start()
 
     def tearDown(self):

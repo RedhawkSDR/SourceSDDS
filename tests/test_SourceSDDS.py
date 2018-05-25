@@ -1337,6 +1337,28 @@ class ComponentTests(ossie.utils.testing.ScaComponentTestCase):
             attachId = 'shouldFail'
 
         self.assertTrue(attachId == 'shouldFail', "Second attach on port should cause a failure!")
+        
+    def testTwoInstances(self):
+        # ensure log level is set to TRACE
+        self.comp.log_level(CF.LogLevels.TRACE)
+        
+        # launch a second instance (first instance is launched via setUp method
+        comp2 = sb.launch(self.spd_file, impl=self.impl)
+        comp2.log_level(CF.LogLevels.TRACE)
+        comp2.buffer_size = 200000
+        comp2.advanced_configuration.pushOnTTValid = False
+        port2 = 29495+1
+        mserver2 = multicast.multicast_server(self.multi_ip, port2)
+        userver2 = unicast.unicast_server(self.uni_ip, port2)
+        sink2 = sb.StreamSink()
+        sink2.start()
+        
+        time.sleep(2)
+        
+        comp2.stop()
+        comp2.releaseObject()
+        
+        
 
     def getData(self,wanttstamps=False):
         

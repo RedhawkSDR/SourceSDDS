@@ -30,10 +30,10 @@ namespace ENDIANNESS {
 }
 
 time_t getStartOfYear();
-BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime &last_sdds_time, time_t &startOfYear);
+BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime &last_sdds_time, time_t &startOfYear, LOGGER _log=LOGGER());
 unsigned short getBps(SDDSpacket* sdds_pkt);
 void mergeSddsSRI(SDDSpacket* sdds_pkt, BULKIO::StreamSRI &sri, bool &changed, bool non_conforming_device);
-void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed,bool &streamIDChanged, std::string &endianness);
+void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed,bool &streamIDChanged, std::string &endianness, LOGGER _log=LOGGER());
 
 
 /* floatingPointCompare is a helper function to handle floating point comparison

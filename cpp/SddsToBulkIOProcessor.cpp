@@ -28,8 +28,6 @@
 #include "SddsToBulkIOUtils.h"
 #include <math.h>
 
-PREPARE_LOGGING(SddsToBulkIOProcessor)
-
 //TODO: Should accum_error_tolerance be a setable property?  Should we report it back?
 SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out):
 	m_pkts_per_read(DEFAULT_PKTS_PER_READ), m_running(false), m_shuttingDown(false), m_wait_for_ttv(false),
@@ -40,6 +38,8 @@ SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bu
 	m_max_time_step(0), m_min_time_step(0), m_ideal_time_step(0), m_time_error_accum(0),
 	m_accum_error_tolerance(0.000001),m_non_conforming_device(false)
 {
+	_log = rh_logger::Logger::getLogger("SddsToBulkIOProcessor");
+	RH_DEBUG(_log,"SddsToBulkIOProcessor constructor - Set logger to "<< _log->getName());
 	// reserve size so it is done at construct time
 	m_bulkIO_data.reserve(m_pkts_per_read * SDDS_DATA_SIZE);
 
@@ -55,13 +55,21 @@ SddsToBulkIOProcessor::SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bu
 	m_sri.ydelta= 0;
 	m_sri.yunits= 0;
 	m_sri.blocking= false;
-
-
 	m_start_of_year = getStartOfYear();
 }
 
 SddsToBulkIOProcessor::~SddsToBulkIOProcessor() {
 	shutDown();
+}
+
+void SddsToBulkIOProcessor::setLogger(LOGGER log) {
+	if (!log) {
+		RH_WARN(_log,"SddsToBulkIOProcessor::setLogger - Ignoring attempt to set logger to a NULL logger");
+	} else {
+		RH_DEBUG(_log,"SddsToBulkIOProcessor::setLogger - Replacing logger "<<_log->getName()<<" with logger "<< log->getName());
+		_log = log;
+		RH_INFO(_log,"SddsToBulkIOProcessor::setLogger - Set logger to "<< _log->getName());
+	}
 }
 
 /**
@@ -71,13 +79,13 @@ SddsToBulkIOProcessor::~SddsToBulkIOProcessor() {
  */
 void SddsToBulkIOProcessor::setPktsPerRead(size_t pkts_per_read) {
 	if (m_running) {
-		LOG_WARN(SddsToBulkIOProcessor, "Cannot set packets per read while thread is running");
+		RH_WARN(_log, "Cannot set packets per read while thread is running");
 		return;
 	}
 	if ((pkts_per_read * SDDS_DATA_SIZE) > (CORBA_MAX_XFER_BYTES)) {
-		LOG_WARN(SddsToBulkIOProcessor, "Cannot set packets per read to " << pkts_per_read << " this would be larger than what can be pushed by CORBA (" << ((CORBA_MAX_XFER_BYTES)) << " Bytes)");
+		RH_WARN(_log, "Cannot set packets per read to " << pkts_per_read << " this would be larger than what can be pushed by CORBA (" << ((CORBA_MAX_XFER_BYTES)) << " Bytes)");
 		m_pkts_per_read = floorl((CORBA_MAX_XFER_BYTES) / (SDDS_DATA_SIZE));
-		LOG_WARN(SddsToBulkIOProcessor, "Setting pkts per read to the max value: " << m_pkts_per_read);
+		RH_WARN(_log, "Setting pkts per read to the max value: " << m_pkts_per_read);
 	} else {
 		m_pkts_per_read = pkts_per_read;
 	}
@@ -96,7 +104,7 @@ size_t SddsToBulkIOProcessor::getPktsPerRead() {
  * buffered data will be pushed out the BulkIO port.
  */
 void SddsToBulkIOProcessor::shutDown() {
-	LOG_DEBUG(SddsToBulkIOProcessor, "Shutting down the packet processor");
+	RH_DEBUG(_log, "Shutting down the packet processor");
 	m_shuttingDown = true;
 	m_running = false;
 }
@@ -107,7 +115,7 @@ void SddsToBulkIOProcessor::shutDown() {
  */
 void SddsToBulkIOProcessor::setWaitForTTV(bool wait_for_ttv) {
 	if (m_running) {
-		LOG_WARN(SddsToBulkIOProcessor, "Cannot set wait on TTV while thread is running");
+		RH_WARN(_log, "Cannot set wait on TTV while thread is running");
 		return;
 	}
 	m_wait_for_ttv = wait_for_ttv;
@@ -119,7 +127,7 @@ void SddsToBulkIOProcessor::setWaitForTTV(bool wait_for_ttv) {
  */
 void SddsToBulkIOProcessor::setPushOnTTV(bool push_on_ttv) {
 	if (m_running) {
-		LOG_WARN(SddsToBulkIOProcessor, "Cannot set push on TTV while thread is running");
+		RH_WARN(_log, "Cannot set push on TTV while thread is running");
 		return;
 	}
 
@@ -169,7 +177,7 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 	m_running = false;
 	m_first_packet = true;
 	m_non_conforming_device = false;
-	LOG_DEBUG(SddsToBulkIOProcessor, "Reseting first-packet and non-conforming flag in SDDSTOBULKIO Processor.")
+	RH_DEBUG(_log, "Reseting first-packet and non-conforming flag in SDDSTOBULKIO Processor.")
 }
 
 /**
@@ -182,7 +190,7 @@ void SddsToBulkIOProcessor::updateExpectedXdelta(double rate, bool complex) {
 	m_current_sample_rate = rate;
 	// If complex then the samples per packet is half
 	if (m_bps == 0) {
-		LOG_FATAL(SddsToBulkIOProcessor, "Bits per sample on SDDS stream is set to zero! Cannot generate expected Xdelta, expect lots of errors.");
+		RH_FATAL(_log, "Bits per sample on SDDS stream is set to zero! Cannot generate expected Xdelta, expect lots of errors.");
 		return;
 	}
 	int samps_per_packet = SDDS_DATA_SIZE / (m_bps / 8);
@@ -219,7 +227,7 @@ bool SddsToBulkIOProcessor::orderIsValid(SddsPacketPtr &pkt) {
 	if (m_expected_seq_number != pkt->get_seq()) {
 		// No need to worry about the wrap around, if everything is uint16_t twos compliment takes care of it all for us.
 		uint16_t numDropped = pkt->get_seq() - m_expected_seq_number;
-		LOG_WARN(SddsToBulkIOProcessor, "Expected packet " << m_expected_seq_number << " Received: " << pkt->get_seq() << " Dropped: " << numDropped);
+		RH_WARN(_log, "Expected packet " << m_expected_seq_number << " Received: " << pkt->get_seq() << " Dropped: " << numDropped);
 		m_pkts_dropped += numDropped;
 		m_first_packet = true;
 		return false;
@@ -255,7 +263,7 @@ void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 	m_last_sdds_time = curr_time;
 
 	if (deltaTime < 0) {
-		LOG_INFO(SddsToBulkIOProcessor, "Received a negative delta between packet time stamps, time is either going backwards or the year has rolled over");
+		RH_INFO(_log, "Received a negative delta between packet time stamps, time is either going backwards or the year has rolled over");
 		m_last_sdds_time = curr_time;
 		return;
 	}
@@ -265,13 +273,13 @@ void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 		// the sample rate is off by a factor of two which we detect here based on the xdelta and account for with the m_non_conforming_device boolean.
 		// we also check m_num_time_slips just in case we have a device that is slipping a lot and happens to fall into this position.
 		if (!m_non_conforming_device && pkt->cx != 0 && m_num_time_slips == 0 && 2*deltaTime < m_max_time_step && 2*deltaTime > m_min_time_step) {
-			LOG_INFO(SddsToBulkIOProcessor, "Based on the received XDelta between packets, it appears that these SDDS packets do not conform to the spec. "
+			RH_INFO(_log, "Based on the received XDelta between packets, it appears that these SDDS packets do not conform to the spec. "
 						   "This is a known issue for some devices (eg. MSDD) where the sample rate in the header is off by a factor of two. "
 						   "The expected XDelta has been adjusted, this will also be reflected in the output SRI unless overridden via SRI Keywords, if the SRI is not overridden it will result in a single erroneous SRI push");
 			m_non_conforming_device = true;
 			updateExpectedXdelta(2*m_current_sample_rate, pkt->cx != 0);
 		} else {
-			LOG_WARN(SddsToBulkIOProcessor, "Delta time of " << deltaTime << " occurred on packet: " << pkt->seq << " delta between packets expected to be between " << m_min_time_step  << " and " << m_max_time_step);
+			RH_WARN(_log, "Delta time of " << deltaTime << " occurred on packet: " << pkt->seq << " delta between packets expected to be between " << m_min_time_step  << " and " << m_max_time_step);
 			slip = true;
 		}
 	}
@@ -279,7 +287,7 @@ void SddsToBulkIOProcessor::checkForTimeSlip(SddsPacketPtr &pkt) {
 	m_time_error_accum += deltaTime - m_ideal_time_step;
 
 	if (std::abs(m_time_error_accum) > m_accum_error_tolerance) {
-		LOG_WARN(SddsToBulkIOProcessor, "The time slip accumulator has exceeded the limit set, counting it as a time slip.");
+		RH_WARN(_log, "The time slip accumulator has exceeded the limit set, counting it as a time slip.");
 		m_time_error_accum = 0.0;
 		slip = true;
 	}
@@ -347,7 +355,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 				boost::unique_lock<boost::mutex> lock(m_upstream_sri_lock);
 				if (m_upstream_sri_set && m_new_upstream_sri) {
 					m_new_upstream_sri = false;
-					mergeUpstreamSRI(m_sri, m_upstream_sri, m_use_upstream_sri, sriChanged,streamIDChanged, m_endianness);
+					mergeUpstreamSRI(m_sri, m_upstream_sri, m_use_upstream_sri, sriChanged,streamIDChanged, m_endianness, _log);
 					// If it is a new Stream ID then we need to create new BULKIO Streams
 					if (streamIDChanged) {
 						createOutputStreams();
@@ -377,7 +385,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			//	m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_sdds_time, m_start_of_year);
 			//}
 
-			m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_sdds_time, m_start_of_year);
+			m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_sdds_time, m_start_of_year, _log);
 
 			// Check for time slips
 			checkForTimeSlip(pkt);
@@ -410,7 +418,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 				break;
 			}
 			default:{
-				LOG_ERROR(SddsToBulkIOProcessor, "Could not push packet, the bits per sample are non-standard and set to: " << m_bps);
+				RH_ERROR(_log, "Could not push packet, the bits per sample are non-standard and set to: " << m_bps);
 				break;
 			}
 			}
@@ -437,7 +445,7 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
  * Pushes the current SRI to the appropriate port based on m_bps.
  */
 void SddsToBulkIOProcessor::pushSri() {
-	LOG_DEBUG(SddsToBulkIOProcessor, "Pushing SRI");
+	RH_DEBUG(_log, "Pushing SRI");
 	switch(m_bps) {
 	case 8:
 		octetStream.sri(m_sri);
@@ -449,7 +457,7 @@ void SddsToBulkIOProcessor::pushSri() {
 		floatStream.sri(m_sri);
 		break;
 	default:
-		LOG_ERROR(SddsToBulkIOProcessor, "Could not push sri, either the bits per sample is non-standard set to: " << m_bps);
+		RH_ERROR(_log, "Could not push sri, either the bits per sample is non-standard set to: " << m_bps);
 		break;
 	}
 
@@ -578,12 +586,12 @@ std::string SddsToBulkIOProcessor::getEndianness() {
  */
 void SddsToBulkIOProcessor::setEndianness(std::string endianness) {
 	if (m_running) {
-		LOG_ERROR(SddsToBulkIOProcessor, "Cannot change endianness while running.");
+		RH_ERROR(_log, "Cannot change endianness while running.");
 		return;
 	}
 
 	if (endianness != ENDIANNESS::BIG_ENDIAN_STR && endianness != ENDIANNESS::LITTLE_ENDIAN_STR) {
-		LOG_ERROR(SddsToBulkIOProcessor, "Tried to set endianness to unknown value: " << endianness << " Endianness will not be changed.");
+		RH_ERROR(_log, "Tried to set endianness to unknown value: " << endianness << " Endianness will not be changed.");
 		return;
 	}
 

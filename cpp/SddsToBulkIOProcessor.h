@@ -44,7 +44,6 @@
 typedef boost::shared_ptr<SDDSpacket> SddsPacketPtr;
 
 class SddsToBulkIOProcessor {
-	ENABLE_LOGGING
 public:
 	SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out);
 	virtual ~SddsToBulkIOProcessor();
@@ -66,7 +65,9 @@ public:
 	std::string getEndianness();
 	void setEndianness(std::string endianness);
 	long getTimeSlips();
+	void setLogger(LOGGER log);
 private:
+	LOGGER _log;
 	size_t m_pkts_per_read;
 	bool m_running;
 	bool m_shuttingDown;

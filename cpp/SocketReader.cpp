@@ -37,18 +37,17 @@
 #include <poll.h>
 
 
-PREPARE_LOGGING(SocketReader)
-
 /**
  * Creates the socket reader with default options set. You must set the connection info prior to starting the run
  * method.
  */
 SocketReader::SocketReader(): m_shuttingDown(false), m_running(false), m_timeout(1), m_pkts_per_read(1), m_socket_buffer_size(-1) {
+	_log = rh_logger::Logger::getLogger("SocketReader");
+	RH_DEBUG(_log,"SocketReader constructor - Set logger to "<< _log->getName());
 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection));
 	memset(&m_unicast_connection, 0, sizeof(m_unicast_connection));
 	m_host_addr.s_addr = 0;
 }
-
 
 /**
  * Calls the shutdown method and exits.
@@ -57,12 +56,22 @@ SocketReader::~SocketReader() {
 	shutDown();
 }
 
+void SocketReader::setLogger(LOGGER log) {
+	if (!log) {
+		RH_WARN(_log,"SocketReader::setLogger - Ignoring attempt to set logger to a NULL logger");
+	} else {
+		RH_DEBUG(_log,"SocketReader::setLogger - Replacing logger "<<_log->getName()<<" with logger "<< log->getName());
+		_log = log;
+		RH_INFO(_log,"SocketReader::setLogger - Set logger to "<< _log->getName());
+	}
+}
+
 /**
  * Sets the shut down boolean to true so that during the next pass
  * the socket reader will close the socket and exit cleanly.
  */
 void SocketReader::shutDown() {
-	LOG_DEBUG(SocketReader, "Shutting down the socket reader");
+	RH_DEBUG(_log, "Shutting down the socket reader");
 	m_shuttingDown = true;
 	m_running = false;
 }
@@ -73,7 +82,7 @@ void SocketReader::shutDown() {
  */
 void SocketReader::setPktsPerRead(size_t pkts_per_read) {
 	if (m_running) {
-		LOG_WARN(SocketReader, "Cannot change the packets per read while the socket reader thread is running");
+		RH_WARN(_log, "Cannot change the packets per read while the socket reader thread is running");
 		return;
 	}
 	m_pkts_per_read = pkts_per_read;
@@ -92,14 +101,14 @@ size_t SocketReader::getPktsPerRead() {
  * This method cannot be called after the socket reader has started.
  */
 void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint16_t vlan, uint16_t port) throw (BadParameterError) {
-	LOG_DEBUG(SocketReader, "Setting connection info to Interface: " << interface << " IP: " << ip << " Port: " << port);
+	RH_DEBUG(_log, "Setting connection info to Interface: " << interface << " IP: " << ip << " Port: " << port);
 	if (m_running) {
-		LOG_WARN(SocketReader, "Cannot change the socket address while the socket reader thread is running");
+		RH_WARN(_log, "Cannot change the socket address while the socket reader thread is running");
 		return;
 	} else if (ip.empty()) {
 		std::stringstream ss;
 		ss << "IP address is empty, it must be provided.";
-		LOG_ERROR(SocketReader, ss.str());
+		RH_ERROR(_log, ss.str());
 		throw BadParameterError(ss.str());
 		return;
 	}
@@ -123,9 +132,9 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 		if (interface.empty()) {
 			interface = getMcastIfaceFromRoutes(ip);
 		}
-		m_multicast_connection = multicast_client(interface.c_str(), ip.c_str(), port, interface);
+		m_multicast_connection = multicast_client(interface.c_str(), ip.c_str(), port, interface, _log);
 	} else {
-		m_unicast_connection = unicast_client(interface.c_str(), ip.c_str(), port, interface);
+		m_unicast_connection = unicast_client(interface.c_str(), ip.c_str(), port, interface, _log);
 	}
 
 	int socket = (m_multicast_connection.sock != 0) ? (m_multicast_connection.sock) : (m_unicast_connection.sock);
@@ -136,10 +145,10 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
 
 		std::stringstream ss;
 		ss << "Could not create socket, please check the parameters provided: Interface: " << interface << " IP: " << ip << " Port: " << port << " VLAN: " << vlan;
-		LOG_ERROR(SocketReader, ss.str());
+		RH_ERROR(_log, ss.str());
 		throw BadParameterError(ss.str());
 	}
-	LOG_INFO(SocketReader, "Set connection interface: " << interface << " IP: " << ip << " Port: " << port << " VLAN: " << vlan);
+	RH_INFO(_log, "Set connection interface: " << interface << " IP: " << ip << " Port: " << port << " VLAN: " << vlan);
 	m_interface = interface;
 }
 
@@ -149,7 +158,7 @@ void SocketReader::setConnectionInfo(std::string interface, std::string ip, uint
  */
 void SocketReader::setSocketBufferSize(int socket_buffer_size) {
 	if (m_running) {
-		LOG_WARN(SocketReader, "Cannot change the socket buffer size while the socket reader thread is running");
+		RH_WARN(_log, "Cannot change the socket buffer size while the socket reader thread is running");
 		return;
 	}
 	m_socket_buffer_size = socket_buffer_size;
@@ -183,7 +192,7 @@ std::string SocketReader::getInterface() {
  * processor to consume.
  */
 void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool confirmHosts) {
-	LOG_DEBUG(SocketReader, "Starting to run");
+	RH_DEBUG(_log, "Starting to run");
 	pthread_setname_np(pthread_self(), "SocketReader");
 	m_shuttingDown = false;
 	m_running = true;
@@ -198,7 +207,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 	// While a blocking socket is more simple / nicer, it forces the thread into a sleep state which can
 	// cause a thread context switch. This thread has a need for speed!
 	if (not setSocketBlockingEnabled(socket, false)) {
-		LOG_ERROR(SocketReader, "Error when setting the socket to non-blocking");
+		RH_ERROR(_log, "Error when setting the socket to non-blocking");
 	}
 
     std::deque<SddsPacketPtr> bufQue;
@@ -211,7 +220,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 
     if (m_socket_buffer_size) {
     	if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &m_socket_buffer_size, sizeof(m_socket_buffer_size)) != 0) {
-    		LOG_WARN(SocketReader, "Failed to set socket buffer size to the requested size: " << m_socket_buffer_size);
+    		RH_WARN(_log, "Failed to set socket buffer size to the requested size: " << m_socket_buffer_size);
     	}
     }
 
@@ -235,7 +244,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 		}
 	}
 
-	LOG_DEBUG(SocketReader, "Entering socket read while loop");
+	RH_DEBUG(_log, "Entering socket read while loop");
     while (not m_shuttingDown) {
 
 		// Get packets, the MSG_DONTWAIT does nothing since we already set this to non-blocking socket. Same with the timeout.
@@ -271,12 +280,12 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 			break;
 		case EINTR:
 		// Someone is trying to kill us.
-			LOG_ERROR(SocketReader, "Socket read was killed by an interrupt. Will stop reading.");
+			RH_ERROR(_log, "Socket read was killed by an interrupt. Will stop reading.");
 			m_shuttingDown = true;
 			m_running = false;
 			break;
 		default:
-			LOG_ERROR(SocketReader, "Received unexpected errno from socket read: " << errno);
+			RH_ERROR(_log, "Received unexpected errno from socket read: " << errno);
 			m_shuttingDown = true;
 			m_running = false;
 			break;
@@ -289,7 +298,7 @@ void SocketReader::run(SmartPacketBuffer<SDDSpacket> *pktbuffer, const bool conf
 	pktbuffer->recycle_buffers(bufQue);
 	m_running = false;
 
-	LOG_DEBUG(SocketReader, "Closing socket");
+	RH_DEBUG(_log, "Closing socket");
 	if (m_multicast_connection.sock) { multicast_close(m_multicast_connection); 	memset(&m_multicast_connection, 0, sizeof(m_multicast_connection)); }
 	if (m_unicast_connection.sock) { unicast_close(m_unicast_connection); 			memset(&m_unicast_connection, 0, sizeof(m_unicast_connection)); }
 }
@@ -325,8 +334,8 @@ void SocketReader::confirmSingleHost(struct mmsghdr msgs[], size_t len) {
 			if (m_host_addr.s_addr != 0) {
 				//XXX: Do not combine these into a single log statement. The inet_ntoa returns a pointer to an internal array containing the string so if you call it twice
 				// on the same line it will overwrite itself, display the same value twice in the log statement, and cause the developer debugging to question their sanity.
-				LOG_WARN(SocketReader, "Expected packets to come from: " << inet_ntoa(m_host_addr));
-				LOG_WARN(SocketReader, "Received packet from: " << inet_ntoa(rcv_host_struct->sin_addr));
+				RH_WARN(_log, "Expected packets to come from: " << inet_ntoa(m_host_addr));
+				RH_WARN(_log, "Received packet from: " << inet_ntoa(rcv_host_struct->sin_addr));
 			}
 
 			m_host_addr = rcv_host_struct->sin_addr;

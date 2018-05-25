@@ -18,33 +18,43 @@
  * along with this program.  If not, see http://www.gnu.org/licenses/.
  */
 #include <unistd.h>
-#include <string.h>
-#include <debug.h>
 #include "SourceNicUtils.h"
 
-PREPARE_LOGGING(SourceNicUtils)
-
-void
-SourceNicUtils::verify_ (
+void SourceNicUtils::verify_ (
     int condition,         // condition value (must be true)
     const char* message,   // Failure message
     const char* condtext,  // Textual representation of condition
     const char* file,      // File location of condition
     int line,              // Line number of condition
-    int errno_)            // Error number (0 to exclude)
+    int errno_,            // Error number (0 to exclude)
+    LOGGER _log)           // RH logger
 {
-  if (!condition) {
-	  SourceNicUtils::verify_error(message, condtext, file, line, errno_);
-  }
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "verify method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "verify method passed valid logger "<<_log->getName());
+    }
+    if (!condition) {
+        SourceNicUtils::verify_error(message, condtext, file, line, errno_, _log);
+    }
 };
- void
-SourceNicUtils::verify_error (
+
+void SourceNicUtils::verify_error (
     const char* message,   // Failure message
     const char* condtext,  // Textual representation of condition
     const char* file,      // File location of condition
     int line,              // Line number of condition
-    int errno_)            // Error number (0 to exclude)
+    int errno_,            // Error number (0 to exclude)
+    LOGGER _log)           // RH logger
 {
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "verify_error method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "verify_error method passed valid logger "<<_log->getName());
+    }
+
     char msg[SourceNicUtils::max_bufsize];
     char errstr[512];
 
@@ -60,6 +70,6 @@ SourceNicUtils::verify_error (
                  file, line,
                  message, condtext);
     }
-    LOG_ERROR(SourceNicUtils, msg)
+    RH_ERROR(_log, msg);
     throw BadParameterError(msg);
 };

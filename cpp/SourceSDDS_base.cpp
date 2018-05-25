@@ -33,27 +33,29 @@ SourceSDDS_base::SourceSDDS_base(const char *uuid, const char *label) :
     Component(uuid, label),
     ThreadedComponent()
 {
+    setThreadName(label);
+
     loadProperties();
 
     dataSddsIn = new bulkio::InSDDSPort("dataSddsIn");
-    addPort("dataSddsIn", dataSddsIn);
+    addPort("dataSddsIn", "The SDDS Input Port. This port provides an attach() and pushSRI() call to provide the network information to the component about where to find the SDDS network data stream. This port only passes metadata not the data stream itself. ", dataSddsIn);
     dataOctetOut = new bulkio::OutOctetPort("dataOctetOut");
-    addPort("dataOctetOut", dataOctetOut);
+    addPort("dataOctetOut", "BULKIO output for 8 bit fixed point data. ", dataOctetOut);
     dataShortOut = new bulkio::OutShortPort("dataShortOut");
-    addPort("dataShortOut", dataShortOut);
+    addPort("dataShortOut", "BULKIO output for 16 bit fixed point data. ", dataShortOut);
     dataFloatOut = new bulkio::OutFloatPort("dataFloatOut");
-    addPort("dataFloatOut", dataFloatOut);
+    addPort("dataFloatOut", "BULKIO output for 32 bit floating point data. ", dataFloatOut);
 }
 
 SourceSDDS_base::~SourceSDDS_base()
 {
-    delete dataSddsIn;
+    dataSddsIn->_remove_ref();
     dataSddsIn = 0;
-    delete dataOctetOut;
+    dataOctetOut->_remove_ref();
     dataOctetOut = 0;
-    delete dataShortOut;
+    dataShortOut->_remove_ref();
     dataShortOut = 0;
-    delete dataFloatOut;
+    dataFloatOut->_remove_ref();
     dataFloatOut = 0;
 }
 

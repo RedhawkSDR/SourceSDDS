@@ -151,8 +151,14 @@ void SddsToBulkIOProcessor::run(SmartPacketBuffer<SDDSpacket> *pktbuffer) {
 		pktbuffer->recycle_buffers(pktsToRecycle);
 	}
 
-	//Push any remaining data and an EOS
-    pushPacket(true);
+
+	// Flush out any remaining data and close the streams
+	if (octetStream)
+		octetStream.close();
+	if (shortStream)
+		shortStream.close();
+	if (floatStream)
+	    floatStream.close();
 
 
 	// Shutting down, recycle all the packets
@@ -298,15 +304,21 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 		if (m_wait_for_ttv && (pkt->get_ttv() == 0)) {
 			pktsToRecycle.push_back(pkt);
 			pkt_it = pktsToWork.erase(pkt_it);
-			if (m_bulkIO_data.size() > 0) {
-				pushPacket(false);
+			if (octetStream) {
+				octetStream.flush();
+				shortStream.flush();
+				floatStream.flush();
 			}
 			continue;
 		}
 
 		// If the order is not valid we've lost some packets, we need to push what we have, reset the SRI.
 		if (!orderIsValid(pkt)) {
-			pushPacket(false);
+			if (octetStream) {
+				octetStream.flush();
+				shortStream.flush();
+				floatStream.flush();
+			}
 			m_first_packet = true;
 			return;
 		} else {
@@ -316,7 +328,11 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			// If this is the case we need to push and restart with the new ttv state.
 			if (m_push_on_ttv && m_current_ttv_flag != (pkt->get_ttv() != 0) ) {
 				m_current_ttv_flag = (pkt->get_ttv() != 0);
-				pushPacket(false);
+				if (octetStream) {
+					octetStream.flush();
+					shortStream.flush();
+					floatStream.flush();
+				}
 				return;
 			}
 
@@ -324,13 +340,19 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 
 			// We can assume that the SDDS streams SRI (xdelta) should stay the same for a given stream.
 			bool sriChanged = false;
+			bool streamIDChanged = false;
 
 
 			{
 				boost::unique_lock<boost::mutex> lock(m_upstream_sri_lock);
 				if (m_upstream_sri_set && m_new_upstream_sri) {
 					m_new_upstream_sri = false;
-					mergeUpstreamSRI(m_sri, m_upstream_sri, m_use_upstream_sri, sriChanged, m_endianness);
+					mergeUpstreamSRI(m_sri, m_upstream_sri, m_use_upstream_sri, sriChanged,streamIDChanged, m_endianness);
+					// If it is a new Stream ID then we need to create new BULKIO Streams
+					if (streamIDChanged) {
+						createOutputStreams();
+
+					}
 				}
 			}
 
@@ -338,25 +360,76 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 				mergeSddsSRI(pkt.get(), m_sri, sriChanged, m_non_conforming_device);
 			}
 
+			// If streams have not been create then create them.
+			if (!octetStream)
+			    createOutputStreams();
+
 			if (sriChanged) {
-				pushPacket(false);
 				pushSri();
+
 				updateExpectedXdelta(m_non_conforming_device ? pkt->get_rate() * 2 : pkt->get_rate(), pkt->cx != 0);
 				m_last_sdds_time = 0;
 				return; // Refill our packets
 			}
 
 			// Create the bulkIO time stamp if this is the first packet to send.
-			if (m_bulkIO_data.size() == 0) {
-				m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_sdds_time, m_start_of_year);
-			}
+			//if (m_bulkIO_data.size() == 0) {
+			//	m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_sdds_time, m_start_of_year);
+			//}
+
+			m_bulkio_time_stamp = getBulkIOTimeStamp(pkt.get(), m_last_sdds_time, m_start_of_year);
 
 			// Check for time slips
 			checkForTimeSlip(pkt);
 
 			// Did some quick testing to see if an insert or a resize + memcopy was faster, insert FTW.
 			//I wasn't sure if sizeof(pkt->d) would work but it does return 1024.
-			m_bulkIO_data.insert(m_bulkIO_data.end(), pkt->d, pkt->d + sizeof(pkt->d));
+			//m_bulkIO_data.insert(m_bulkIO_data.end(), pkt->d, pkt->d + sizeof(pkt->d));
+			switch(m_bps) {
+			case 8: {
+				// Push initial SRI?
+		        redhawk::buffer<unsigned char> dataBufferOctet(1024);
+		        std::copy(&pkt->d[0],&pkt->d[1024],dataBufferOctet.data());
+				octetStream.write(dataBufferOctet,m_bulkio_time_stamp);
+				break;
+			}
+			case 16: {
+				// Create a REDHAWK Buffer and copy the data from the SDDS packet into it.
+		        //redhawk::buffer<short> dataBufferShort(1024/2);
+		        redhawk::buffer<unsigned char> dataBufferOctet(1024);
+		        std::copy(&pkt->d[0],&pkt->d[1024],dataBufferOctet.data());
+
+				// Ugh, we need to byte swap. At least there is a nice builtin for swapping bytes for shorts.
+				if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
+					swab(dataBufferOctet.data(), dataBufferOctet.data(), dataBufferOctet.size());
+				}
+				redhawk::buffer<short> dataBufferShort = redhawk::buffer<short>::recast(dataBufferOctet);
+				shortStream.write(dataBufferShort,m_bulkio_time_stamp);
+				break;
+			}
+			case 32: {
+		        redhawk::buffer<unsigned char> dataBufferOctet(1024);
+		        std::copy(&pkt->d[0],&pkt->d[1024],dataBufferOctet.data());
+
+				// Ugh, we need to byte swap and for floats there is no nice method for us to use like there is for shorts. Time to iterate.
+				if (atol(m_endianness.c_str()) != __BYTE_ORDER) {
+					uint32_t *buf = reinterpret_cast<uint32_t*>(dataBufferOctet.data());
+					for (size_t i = 0; i < dataBufferOctet.size() / sizeof(float); ++i) {
+						buf[i] = __builtin_bswap32(buf[i]);
+					}
+				}
+
+				redhawk::buffer<float> dataBufferFloat = redhawk::buffer<float>::recast(dataBufferOctet);
+				floatStream.write(dataBufferFloat,m_bulkio_time_stamp);
+				break;
+			}
+			default:{
+				LOG_ERROR(SddsToBulkIOProcessor, "Could not push packet, the bits per sample are non-standard and set to: " << m_bps);
+				break;
+			}
+			}
+
+
 
 			// And we are done with this packet. Take it off the pktsToWork que and add it to the pktsToRecycle que.
 			pktsToRecycle.push_back(pkt);
@@ -369,14 +442,14 @@ void SddsToBulkIOProcessor::processPackets(std::deque<SddsPacketPtr> &pktsToWork
 			if (m_expected_seq_number != 0 && m_expected_seq_number % 32 == 31)
 				m_expected_seq_number++;
 
-			// We've worked through the full stack of packets, push the data and clear the buffer
-			if (pkt_it == pktsToWork.end()) {
-				pushPacket(false);
-				m_bulkIO_data.clear();
-			}
+//			// We've worked through the full stack of packets, push the data and clear the buffer
+//			if (pkt_it == pktsToWork.end()) {
+//				pushPacket(false);
+//				m_bulkIO_data.clear();
 		}
 	}
 }
+
 
 /**
  * Pushes the current SRI to the appropriate port based on m_bps.
@@ -385,13 +458,13 @@ void SddsToBulkIOProcessor::pushSri() {
 	LOG_DEBUG(SddsToBulkIOProcessor, "Pushing SRI");
 	switch(m_bps) {
 	case 8:
-		m_octet_out->pushSRI(m_sri);
+		octetStream.sri(m_sri);
 		break;
 	case 16:
-		m_short_out->pushSRI(m_sri);
+		shortStream.sri(m_sri);
 		break;
 	case 32:
-		m_float_out->pushSRI(m_sri);
+		floatStream.sri(m_sri);
 		break;
 	default:
 		LOG_ERROR(SddsToBulkIOProcessor, "Could not push sri, either the bits per sample is non-standard set to: " << m_bps);
@@ -451,6 +524,24 @@ void SddsToBulkIOProcessor::pushPacket(bool eos) {
 	}
 
 	m_bulkIO_data.clear();
+}
+
+void SddsToBulkIOProcessor::createOutputStreams() {
+
+	if (octetStream)
+		octetStream.close();
+	if (shortStream)
+		shortStream.close();
+	if (floatStream)
+		floatStream.close();
+
+	octetStream = m_octet_out->createStream(m_sri);
+	shortStream = m_short_out->createStream(m_sri);
+	floatStream = m_float_out->createStream(m_sri);
+
+	octetStream.setBufferSize(m_pkts_per_read*1024);
+	shortStream.setBufferSize(m_pkts_per_read*1024/2);
+	floatStream.setBufferSize(m_pkts_per_read*1024/4);
 }
 /**
  * Returns whether the processor is set to push on a time tag valid flag change.

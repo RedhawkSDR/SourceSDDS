@@ -177,9 +177,12 @@ bool compareSRI(BULKIO::StreamSRI A, BULKIO::StreamSRI B) {
 	return same;
 }
 
-void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, std::string &endianness_comp) {
+void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, bool &streamIDChanged,std::string &endianness_comp) {
 	if (!compareSRI(currSRI, upstreamSRI)) {
 		changed = true;
+	    if (currSRI.streamID != upstreamSRI.streamID)
+	    	streamIDChanged = true;
+
 		currSRI.streamID = upstreamSRI.streamID;
 
 		currSRI.hversion = upstreamSRI.hversion;

@@ -24,9 +24,9 @@ if [ "$1" = "rpm" ]; then
     if [ -e rh.SourceSDDS.spec ]; then
         mydir=`dirname $0`
         tmpdir=`mktemp -d`
-        cp -r ${mydir} ${tmpdir}/rh.SourceSDDS-1.2.0
-        tar czf ${tmpdir}/rh.SourceSDDS-1.2.0.tar.gz --exclude=".svn" --exclude=".git" -C ${tmpdir} rh.SourceSDDS-1.2.0
-        rpmbuild -ta ${tmpdir}/rh.SourceSDDS-1.2.0.tar.gz
+        cp -r ${mydir} ${tmpdir}/rh.SourceSDDS-2.0.0
+        tar czf ${tmpdir}/rh.SourceSDDS-2.0.0.tar.gz --exclude=".svn" --exclude=".git" -C ${tmpdir} rh.SourceSDDS-2.0.0
+        rpmbuild -ta ${tmpdir}/rh.SourceSDDS-2.0.0.tar.gz
         rm -rf $tmpdir
     else
         echo "Missing RPM spec file in" `pwd`

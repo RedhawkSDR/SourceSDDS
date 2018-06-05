@@ -41,26 +41,6 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 	m_sddsToBulkIOThread(NULL),
 	m_sddsToBulkIO(dataOctetOut, dataShortOut, dataFloatOut)
 {
-	std::string baseLogName = _baseLog->getName();
-	sdds2bio_log = _baseLog->getChildLogger(baseLogName+"_sdds2bio");
-	socket_log   = _baseLog->getChildLogger(baseLogName+"_socket");
-	RH_DEBUG(_baseLog, " Testing _baseLog with name "<<baseLogName);
-	RH_DEBUG(sdds2bio_log, " Testing sdds2bio_log");
-	RH_DEBUG(socket_log, " Testing socket_log");
-	m_sddsToBulkIO.setLogger(sdds2bio_log);
-	m_socketReader.setLogger(socket_log);
-	setPropertyQueryImpl(advanced_configuration, this, &SourceSDDS_i::get_advanced_configuration_struct);
-	setPropertyQueryImpl(advanced_optimizations, this, &SourceSDDS_i::get_advanced_optimizations_struct);
-	setPropertyQueryImpl(status, this, &SourceSDDS_i::get_status_struct);
-
-	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
-	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
-
-	dataSddsIn->setNewAttachDetachCallback(this);
-	dataSddsIn->setNewSriListener(this, &SourceSDDS_i::newSriListener);
-	dataSddsIn->setSriChangeListener(this, &SourceSDDS_i::newSriListener);
-
-	m_attach_stream.attached = false;
 }
 
 /**
@@ -457,6 +437,26 @@ void SourceSDDS_i::setupSddsToBulkIOOptions() {
  */
 void SourceSDDS_i::constructor()
 {
+	std::string baseLogName = _baseLog->getName();
+	sdds2bio_log = _baseLog->getChildLogger(baseLogName+"_sdds2bio");
+	socket_log   = _baseLog->getChildLogger(baseLogName+"_socket");
+	RH_DEBUG(_baseLog, " Testing _baseLog with name "<<baseLogName);
+	RH_DEBUG(sdds2bio_log, " Testing sdds2bio_log");
+	RH_DEBUG(socket_log, " Testing socket_log");
+	m_sddsToBulkIO.setLogger(sdds2bio_log);
+	m_socketReader.setLogger(socket_log);
+	setPropertyQueryImpl(advanced_configuration, this, &SourceSDDS_i::get_advanced_configuration_struct);
+	setPropertyQueryImpl(advanced_optimizations, this, &SourceSDDS_i::get_advanced_optimizations_struct);
+	setPropertyQueryImpl(status, this, &SourceSDDS_i::get_status_struct);
+
+	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
+	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
+
+	dataSddsIn->setNewAttachDetachCallback(this);
+	dataSddsIn->setNewSriListener(this, &SourceSDDS_i::newSriListener);
+	dataSddsIn->setSriChangeListener(this, &SourceSDDS_i::newSriListener);
+
+	m_attach_stream.attached = false;
 }
 
 /**

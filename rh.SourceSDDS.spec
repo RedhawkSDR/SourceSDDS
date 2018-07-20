@@ -31,7 +31,7 @@ Prefix:         %{_prefix}
 
 Name:           rh.SourceSDDS
 Version:        1.1.1
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        Component %{name}
 
 Group:          REDHAWK/Components

@@ -44,7 +44,7 @@ import subprocess, signal, os
 
 LITTLE_ENDIAN=1234
 BIG_ENDIAN=4321
-DEBUG_LEVEL=5
+DEBUG_LEVEL=0
 
 sb.release = getattr(sb,'release',sb.domainless._cleanUpLaunchedComponents)
 

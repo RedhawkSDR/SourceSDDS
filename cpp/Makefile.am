@@ -19,6 +19,7 @@
 #
 ACLOCAL_AMFLAGS = -I m4 -I${OSSIEHOME}/share/aclocal/ossie
 AUTOMAKE_OPTIONS = subdir-objects
+SUBDIRS=test_utils
 
 ossieName = rh.SourceSDDS
 libdir = $(prefix)/dom/components/rh/SourceSDDS/cpp

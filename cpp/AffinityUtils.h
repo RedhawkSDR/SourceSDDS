@@ -98,7 +98,15 @@ int setAffinity(pthread_t thread, std::string str_mask) {
 	return 0;
 }
 
-std::string getAffinity(pthread_t thread) {
+std::string getAffinity(pthread_t thread, LOGGER _log=LOGGER()) {
+
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "getAffinity method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "getAffinity method passed valid logger "<<_log->getName());
+    }
+
 	int s, j;
 	cpu_set_t cpuset;
 
@@ -109,7 +117,7 @@ std::string getAffinity(pthread_t thread) {
 	/* Check the actual affinity mask assigned to the thread */
 	s = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 	if (s != 0) {
-		RH_NL_WARN("SourceSDDSUtils", "Could not get affinity for given thread");
+		RH_WARN(_log, "getAffinity: Could not get affinity for given thread");
 		return "";
 	}
 
@@ -128,7 +136,15 @@ std::string getAffinity(pthread_t thread) {
 	return stream.str();
 }
 
-static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) {
+static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners, LOGGER _log=LOGGER()) {
+
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "get_rx_queue method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "get_rx_queue method passed valid logger "<<_log->getName());
+    }
+
 	// Im not super happy with this but there doesnt seem to be any other API to get the current
 	// buffer "fullness" other than the proc file system....so we're file parsing in C++ to get a kernel
 	// value.
@@ -152,7 +168,7 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) 
 	/* Read the entire contents of /proc/net/udp into the buffer.  */
 	fp = fopen ("/proc/net/udp", "r");
 	if (fp == NULL) {
-		RH_NL_DEBUG("SourceSDDSUtils", "Failed to open /proc/net/udp");
+		RH_DEBUG(_log, "get_rx_queue: Failed to open /proc/net/udp");
 		return 0;
 	}
 	bytes_read = fread (buffer, 1, sizeof (buffer), fp);
@@ -174,7 +190,7 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) 
 	// Find all occurrences and return the max
 	match = strstr (buffer, ss.str().c_str());
 	if (match == NULL) {
-		RH_NL_DEBUG("SourceSDDSUtils", "In parsing /proc/net/udp the IP and port not found, is the socket bound?");
+		RH_DEBUG(_log, "get_rx_queue: In parsing /proc/net/udp the IP and port not found, is the socket bound?");
 		return 0;
 	}
 
@@ -188,7 +204,7 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) 
 		std::size_t colon_pos = rx_queue_str.find(':');
 
 		if (colon_pos == std::string::npos) {
-			RH_NL_WARN("SourceSDDSUtils", "Failed to properly parse the UDP socket buffer information from /proc/net/udp");
+			RH_WARN(_log, "get_rx_queue: Failed to properly parse the UDP socket buffer information from /proc/net/udp");
 			return 0;
 		}
 
@@ -210,9 +226,16 @@ static uint64_t get_rx_queue(std::string ip, uint16_t port, int &num_listeners) 
 	return rx_queue;
 }
 
-static int64_t get_rx_dropped(std::string interface) {
+static int64_t get_rx_dropped(std::string interface, LOGGER _log=LOGGER()) {
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "get_rx_dropped method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "get_rx_dropped method passed valid logger "<<_log->getName());
+    }
+
 	if (interface.empty()) {
-		RH_NL_DEBUG("SourceSDDSUtils", "Interface provided is empty, cannot get rx_dropped statistics");
+		RH_DEBUG(_log, "get_rx_dropped: Interface provided is empty, cannot get rx_dropped statistics");
 		return 0;
 	}
 
@@ -225,7 +248,7 @@ static int64_t get_rx_dropped(std::string interface) {
 
 	fp = fopen(ss.str().c_str(), "r");
 	if (!fp) {
-		RH_NL_DEBUG("SourceSDDSUtils", "Failed to open " << ss.str());
+		RH_DEBUG(_log, "get_rx_dropped: Failed to open " << ss.str());
 		return -1;
 	}
 	bytes_read = fread(buffer, 1, sizeof (buffer), fp);
@@ -242,7 +265,14 @@ static int64_t get_rx_dropped(std::string interface) {
 	return atol(buffer);
 }
 
-int setPolicyAndPriority(pthread_t thread, CORBA::Long priority, std::string thread_desc) {
+int setPolicyAndPriority(pthread_t thread, CORBA::Long priority, std::string thread_desc, LOGGER _log=LOGGER()) {
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "setPolicyAndPriority method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "setPolicyAndPriority method passed valid logger "<<_log->getName());
+    }
+
 	struct sched_param param;
 	int retVal = 0;
 	param.sched_priority = priority;
@@ -254,18 +284,25 @@ int setPolicyAndPriority(pthread_t thread, CORBA::Long priority, std::string thr
 	}
 
 	if (retVal != 0) {
-		RH_NL_WARN("SourceSDDSUtils", "Failed to set " << thread_desc << " policy and priority. Permissions may prevent this or values provided may be invalid");
+		RH_WARN(_log, "setPolicyAndPriority: Failed to set " << thread_desc << " policy and priority. Permissions may prevent this or values provided may be invalid");
 	}
 
 	return retVal;
 }
 
-int getPriority(pthread_t thread, CORBA::Long &priority, std::string thread_desc) {
+int getPriority(pthread_t thread, CORBA::Long &priority, std::string thread_desc, LOGGER _log=LOGGER()) {
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "getPriority method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "getPriority method passed valid logger "<<_log->getName());
+    }
+
 	int retVal = 0, policy;
 	struct sched_param param;
 	retVal = pthread_getschedparam(thread, &policy, &param);
 	if (retVal != 0) {
-		RH_NL_WARN("SourceSDDSUtils", "Could not get priority of the " << thread_desc);
+		RH_WARN(_log, "getPriority: Could not get priority of the " << thread_desc);
 	} else {
 		priority = param.sched_priority;
 	}

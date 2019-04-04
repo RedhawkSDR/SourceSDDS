@@ -7,8 +7,7 @@
 * [REDHAWK Version Compatibility](#redhawk-version-compatibility)
 * [Installation Instructions](#installation-instructions)
 * [Design](#design)
-* [Properties](#properties)
-* [SRI](#sri)
+* [Asset Use](#asset-use)
 * [Unimplemented Optimizations](#unimplemented-optimizations)
 * [Copyrights](#copyrights)
 * [License](#license)
@@ -33,6 +32,7 @@ latest unreleased development code for the latest released version.
 
 | Asset Version | Minimum REDHAWK Version Required |
 | ------------- | -------------------------------- |
+| 2.x           | 2.1                              |
 | 1.x           | 2.0                              |
 
 ## Installation Instructions
@@ -48,7 +48,11 @@ The design goals for this component were to provide a clean, easy to follow, Sou
 The dataflow and source code can be broken up into four distict sections; component logic, socket reader, internal buffers, and the SDDS to bulkIO processor. The component class has no service loop and instead starts two threads on start; the socket reader and the SDDS to BulkIO processor. The socket reader thread pulls a user defined number of SDDS packets off the socket at a time and places them into the shared buffer for the SDDS to BulkIO thread to consume and push
 out the BulkIO ports.
 
-## Properties
+## Asset Use
+
+SourceSDDS ingests network SDDS and outputs BULKIO data as Octet, Short, or Float. The component receives information on how and where to consume the network data either from receiving and attach() and pushSRI() call in the dataSddsIn port or by using the attachment_override property. The component has a property for the network "interface" indicating which network interface on the host computer must be used in order to receive the network data. If the interface is left blank the component will try to resolve the correct interface based on the IP address and VLAN of the desired incoming data. Once the component has acquired the network stream it will remove the the SDDS network headers package the data as BULKIO and push it out the appropriate BULKIO port.    
+
+#### Properties
 
 Properties and their descriptions are below, struct props are shown with their struct properties in a table below:
 
@@ -105,8 +109,9 @@ Properties and their descriptions are below, struct props are shown with their s
 | input_stream_id | The stream id set via SRI. A default is used if no stream ID is passed via SRI.|
 | time_slips | The number of time slips which have occurred. A time slip could be either a single time slip event or an accumulated time slip. A single time slip event is defined as the SDDS timestamps between two SDDS packets exceeding a one sample delta. (eg. there was one sample time lag or lead between consecutive packets)  An accumulated time slip is defined as the absolute value of the time error accumulator exceeding 0.000001 seconds. The time error accumulator is a running total of the delta between the expected (1/sample_rate) and actual time stamps and should always hover around zero. |
 | num_packets_dropped_by_nic | Read from /sys/class/\[interface\]/statistics/rx_dropped, indicates the number of packets received by the network device that are not forwarded to the upper layers for packet processing. This is NOT an indication of full buffers but instead a hint that something may be missconfigured as the NIC is receiving packets it does not know what to do with. See the network driver for the exact meaning of this value. |
+| interface | The network interface currently in use by the component for consuming data from the network. |
 
-## SRI
+#### SRI
 
 SRI can be fed into the SDDS port for the purpose of overriding the SDDS header, setting a stream ID, and passing along keywords. By default, the xdelta/sample rate is derived from the SDDS header. The sample rate supplied with the attach call is always ignored. Optionally, you may override the xdelta via keywords. Below is the list of keywords that are read by this component and its response.
 

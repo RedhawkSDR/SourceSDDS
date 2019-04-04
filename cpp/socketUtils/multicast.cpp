@@ -33,21 +33,21 @@
 #include "SourceNicUtils.h"
 #include <ossie/debug.h>
 
-static multicast_t multicast_open_ (const char* iface, const char* group, int port, std::string& chosen_iface)
+static multicast_t multicast_open_ (const char* iface, const char* group, int port, std::string& chosen_iface, LOGGER _log)
 {
   unsigned int ii;
 
   multicast_t multicast = { socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) };
-  VERIFY_ERR(multicast.sock >= 0, "create socket");
+  VERIFY_ERR(multicast.sock >= 0, "create socket", _log);
   int one = 1;
-  VERIFY_ERR(setsockopt(multicast.sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == 0, "reuse address");
+  VERIFY_ERR(setsockopt(multicast.sock, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one)) == 0, "reuse address", _log);
 
   /* Enumerate all the devices. */
   struct ifconf devs = {0};
   devs.ifc_len = 512*sizeof(struct ifreq);
   devs.ifc_buf = (char*)malloc(devs.ifc_len);
-  VERIFY_ERR(devs.ifc_buf != 0, "memory allocation");
-  VERIFY_ERR(ioctl(multicast.sock, SIOCGIFCONF, &devs) >= 0, "enum devices");
+  VERIFY_ERR(devs.ifc_buf != 0, "memory allocation", _log);
+  VERIFY_ERR(ioctl(multicast.sock, SIOCGIFCONF, &devs) >= 0, "enum devices", _log);
   for (ii = 0; ii < devs.ifc_len/sizeof(struct ifreq); ii++) {
 	  bool any = (!*iface);
 	  bool any_interface_vlan_match = false;
@@ -61,38 +61,38 @@ static multicast_t multicast_open_ (const char* iface, const char* group, int po
 	  if (any || any_interface_vlan_match || interface_exact_match) {
 		  try{
 			  struct ifreq dev = devs.ifc_req[ii];
-			  VERIFY_ERR(ioctl(multicast.sock, SIOCGIFFLAGS, &dev) >= 0, "get flags");
-			  VERIFY(dev.ifr_flags & IFF_UP, "interface up");
-			  VERIFY(!(dev.ifr_flags & IFF_LOOPBACK), "not loopback");
-			  VERIFY(dev.ifr_flags & IFF_MULTICAST, "must be multicast");
+			  VERIFY_ERR(ioctl(multicast.sock, SIOCGIFFLAGS, &dev) >= 0, "get flags", _log);
+			  VERIFY(dev.ifr_flags & IFF_UP, "interface up", _log);
+			  VERIFY(!(dev.ifr_flags & IFF_LOOPBACK), "not loopback", _log);
+			  VERIFY(dev.ifr_flags & IFF_MULTICAST, "must be multicast", _log);
 			  if(any) {
 				  struct ip_mreq mreqn;
 				  memset(&mreqn, 0, sizeof(mreqn));
-				  VERIFY_ERR(inet_aton(group, &mreqn.imr_multiaddr), "convert string to group");
+				  VERIFY_ERR(inet_aton(group, &mreqn.imr_multiaddr), "convert string to group", _log);
 				  mreqn.imr_interface.s_addr =  (INADDR_ANY);
-				  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof(struct ip_mreq)) == 0, "set device");
+				  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof(struct ip_mreq)) == 0, "set device", _log);
 				  multicast.addr.sin_family = AF_INET;
 				  multicast.addr.sin_addr.s_addr = htonl(INADDR_ANY);
 				  multicast.addr.sin_port = htons(port);
-				  VERIFY_ERR(bind(multicast.sock, (struct sockaddr*)&multicast.addr, sizeof(struct sockaddr_in)) == 0, "socket bind");
+				  VERIFY_ERR(bind(multicast.sock, (struct sockaddr*)&multicast.addr, sizeof(struct sockaddr_in)) == 0, "socket bind", _log);
 				  if (!((mreqn.imr_multiaddr.s_addr & 0x000000FF) < 224) || ((mreqn.imr_multiaddr.s_addr & 0x000000FF) > 239)) {
-					  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreqn, sizeof(struct ip_mreq)) == 0, "igmp join");
+					  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreqn, sizeof(struct ip_mreq)) == 0, "igmp join", _log);
 				  }
 			  }
 			  else {
-				  VERIFY_ERR(ioctl(multicast.sock, SIOCGIFINDEX, &dev) == 0, "get index");
+				  VERIFY_ERR(ioctl(multicast.sock, SIOCGIFINDEX, &dev) == 0, "get index", _log);
 				  struct ip_mreqn mreqn;
 				  memset(&mreqn, 0, sizeof(mreqn));
-				  VERIFY_ERR(inet_aton(group, &mreqn.imr_multiaddr), "convert string to group");
+				  VERIFY_ERR(inet_aton(group, &mreqn.imr_multiaddr), "convert string to group", _log);
 				  mreqn.imr_address = ((struct sockaddr_in*)(&dev.ifr_addr))->sin_addr;
 				  mreqn.imr_ifindex = dev.ifr_ifindex;
-				  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof(struct ip_mreqn)) == 0, "set device");
+				  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof(struct ip_mreqn)) == 0, "set device", _log);
 				  multicast.addr.sin_family = AF_INET;
 				  multicast.addr.sin_addr.s_addr = mreqn.imr_multiaddr.s_addr;
 				  multicast.addr.sin_port = htons(port);
-				  VERIFY_ERR(bind(multicast.sock, (struct sockaddr*)&multicast.addr, sizeof(struct sockaddr_in)) == 0, "socket bind");
+				  VERIFY_ERR(bind(multicast.sock, (struct sockaddr*)&multicast.addr, sizeof(struct sockaddr_in)) == 0, "socket bind", _log);
 				  if (!((multicast.addr.sin_addr.s_addr & 0x000000FF) < 224) || ((multicast.addr.sin_addr.s_addr & 0x000000FF) > 239)) {
-					  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreqn, sizeof(struct ip_mreqn)) == 0, "igmp join");
+					  VERIFY_ERR(setsockopt(multicast.sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreqn, sizeof(struct ip_mreqn)) == 0, "igmp join", _log);
 				  }
 			  }
 
@@ -108,7 +108,7 @@ static multicast_t multicast_open_ (const char* iface, const char* group, int po
 	  }
   }
 
-  RH_NL_WARN("multicast", "Could not find the interface requested, closing socket");
+  RH_WARN(_log, "Could not find the interface requested, closing socket");
 
   /* If we get here, we've failed. */
   close(multicast.sock);
@@ -119,9 +119,15 @@ static multicast_t multicast_open_ (const char* iface, const char* group, int po
 }
 
 
-multicast_t multicast_client (const char* iface, const char* group, int port, std::string& chosen_iface) throw (BadParameterError)
+multicast_t multicast_client (const char* iface, const char* group, int port, std::string& chosen_iface, LOGGER _log) throw (BadParameterError)
 {
-  multicast_t client = multicast_open_(iface, group, port, chosen_iface);
+  if (!_log) {
+    _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+    RH_DEBUG(_log, "multicast_client method passed null logger; creating logger "<<_log->getName());
+  } else {
+    RH_DEBUG(_log, "multicast_client method passed valid logger "<<_log->getName());
+  }
+  multicast_t client = multicast_open_(iface, group, port, chosen_iface, _log);
   return client;
 }
 
@@ -132,12 +138,18 @@ ssize_t multicast_receive (multicast_t client, void* buffer, size_t bytes)
 }
 
 
-multicast_t multicast_server (const char* iface, const char* group, int port, std::string& chosen_iface)
+multicast_t multicast_server (const char* iface, const char* group, int port, std::string& chosen_iface, LOGGER _log)
 {
-  multicast_t server = multicast_open_(iface, group, port, chosen_iface);
+  if (!_log) {
+    _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+    RH_DEBUG(_log, "multicast_server method passed null logger; creating logger "<<_log->getName());
+  } else {
+    RH_DEBUG(_log, "multicast_server method passed valid logger "<<_log->getName());
+  }
+  multicast_t server = multicast_open_(iface, group, port, chosen_iface, _log);
   if (server.sock != -1) {
     uint8_t ttl = 32;
-    VERIFY_ERR(setsockopt(server.sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) == 0, "set ttl");
+    VERIFY_ERR(setsockopt(server.sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) == 0, "set ttl", _log);
   }
   return server;
 }

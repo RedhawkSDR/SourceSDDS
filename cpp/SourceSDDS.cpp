@@ -31,8 +31,6 @@
 #include "AffinityUtils.h"
 #include <ossie/CF/cf.h>
 
-PREPARE_LOGGING(SourceSDDS_i)
-
 /**
  * Constructor sets up callbacks for setters and getters of property structs,
  * and the callbacks for attach/detach and SRI change listeners.
@@ -43,18 +41,6 @@ SourceSDDS_i::SourceSDDS_i(const char *uuid, const char *label) :
 	m_sddsToBulkIOThread(NULL),
 	m_sddsToBulkIO(dataOctetOut, dataShortOut, dataFloatOut)
 {
-	setPropertyQueryImpl(advanced_configuration, this, &SourceSDDS_i::get_advanced_configuration_struct);
-	setPropertyQueryImpl(advanced_optimizations, this, &SourceSDDS_i::get_advanced_optimizations_struct);
-	setPropertyQueryImpl(status, this, &SourceSDDS_i::get_status_struct);
-
-	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
-	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
-
-	dataSddsIn->setNewAttachDetachCallback(this);
-	dataSddsIn->setNewSriListener(this, &SourceSDDS_i::newSriListener);
-	dataSddsIn->setSriChangeListener(this, &SourceSDDS_i::newSriListener);
-
-	m_attach_stream.attached = false;
 }
 
 /**
@@ -69,7 +55,7 @@ SourceSDDS_i::~SourceSDDS_i(){}
  * BulkIO class so that it can incorporate the SRI into the outputed BulkIO stream.
  */
 void SourceSDDS_i::newSriListener(const BULKIO::StreamSRI & newSri) {
-	LOG_INFO(SourceSDDS_i, "Received new upstream SRI");
+	RH_INFO(_baseLog, "Received new upstream SRI");
 	m_sddsToBulkIO.setUpstreamSri(newSri);
 }
 
@@ -105,7 +91,7 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 	retVal.input_vlan = (attachment_override.enabled) ? attachment_override.vlan:m_attach_stream.vlan;
 
 	// Not 100% sure why but the queue can actually get about 280 bytes larger than the set max. I guess linux gives 110% har har har (not actually 110%)
-	uint64_t rx_queue = get_rx_queue(retVal.input_address, retVal.input_port, num_listeners);
+	uint64_t rx_queue = get_rx_queue(retVal.input_address, retVal.input_port, num_listeners, _baseLog);
 	percent = 100*(float) rx_queue / (float) m_socketReader.getSocketBufferSize();
 	ss << std::fixed << rx_queue << " / " << m_socketReader.getSocketBufferSize() << " (" << percent << "%)";
 	retVal.udp_socket_buffer_queue = ss.str();
@@ -117,7 +103,7 @@ struct status_struct SourceSDDS_i::get_status_struct() {
 	retVal.input_endianness = m_sddsToBulkIO.getEndianness();
 	retVal.time_slips = m_sddsToBulkIO.getTimeSlips();
 
-	retVal.num_packets_dropped_by_nic = get_rx_dropped(status.interface);
+	retVal.num_packets_dropped_by_nic = get_rx_dropped(status.interface, _baseLog);
 
 	retVal.interface = status.interface;
 
@@ -153,11 +139,11 @@ struct advanced_optimizations_struct SourceSDDS_i::get_advanced_optimizations_st
 	retVal.udp_socket_buffer_size = m_socketReader.getSocketBufferSize();
 
 	if (m_sddsToBulkIOThread) {
-		getPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
+		getPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread", _baseLog);
 	}
 
 	if (m_socketReaderThread) {
-		getPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_priority, "socket reader thread");
+		getPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_priority, "socket reader thread", _baseLog);
 	}
 
 	retVal.sdds_to_bulkio_thread_priority = advanced_optimizations.sdds_to_bulkio_thread_priority;
@@ -174,13 +160,13 @@ struct advanced_optimizations_struct SourceSDDS_i::get_advanced_optimizations_st
  */
 void SourceSDDS_i::set_advanced_configuration_struct(struct advanced_configuration_struct request) {
 	if (started() && m_sddsToBulkIO.getPushOnTTV() != request.push_on_ttv) {
-		LOG_WARN(SourceSDDS_i, "Cannot set push on TTV while thread is running");
+		RH_WARN(_baseLog, "Cannot set push on TTV while thread is running");
 	} else {
 		m_sddsToBulkIO.setPushOnTTV(request.push_on_ttv);
 	}
 
 	if (started() && m_sddsToBulkIO.getWaitOnTTV() != request.wait_on_ttv) {
-		LOG_WARN(SourceSDDS_i, "Cannot set wait on TTV while thread is running");
+		RH_WARN(_baseLog, "Cannot set wait on TTV while thread is running");
 	} else {
 		m_sddsToBulkIO.setWaitForTTV(request.wait_on_ttv);
 	}
@@ -195,7 +181,7 @@ void SourceSDDS_i::set_advanced_configuration_struct(struct advanced_configurati
  */
 void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimizations_struct request) {
 	if (started() && advanced_optimizations.buffer_size != request.buffer_size) {
-		LOG_WARN(SourceSDDS_i, "Cannot set the buffer size while the component is running");
+		RH_WARN(_baseLog, "Cannot set the buffer size while the component is running");
 	} else {
 		advanced_optimizations.buffer_size = request.buffer_size;
 	}
@@ -204,30 +190,30 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
 		advanced_optimizations.pkts_per_socket_read = request.pkts_per_socket_read;
 		m_socketReader.setPktsPerRead(request.pkts_per_socket_read);
 	} else if(m_socketReader.getPktsPerRead() != request.pkts_per_socket_read) {
-		LOG_WARN(SourceSDDS_i, "Cannot set packets per socket read size while the component is running");
+		RH_WARN(_baseLog, "Cannot set packets per socket read size while the component is running");
 	}
 
 	if (not started()) {
 		advanced_optimizations.sdds_pkts_per_bulkio_push = request.sdds_pkts_per_bulkio_push;
 		m_sddsToBulkIO.setPktsPerRead(request.sdds_pkts_per_bulkio_push);
 	} else if (m_sddsToBulkIO.getPktsPerRead() != request.sdds_pkts_per_bulkio_push) {
-		LOG_WARN(SourceSDDS_i, "Cannot set the packets per bulkIO push while the component is running");
+		RH_WARN(_baseLog, "Cannot set the packets per bulkIO push while the component is running");
 	}
 
 	if (started() && m_sddsToBulkIOThread) {
 		if (setAffinity(m_sddsToBulkIOThread->native_handle(), request.sdds_to_bulkio_thread_affinity) != 0) {
-			LOG_WARN(SourceSDDS_i, "Failed to set affinity of the SDDS to bulkIO thread");
+			RH_WARN(_baseLog, "Failed to set affinity of the SDDS to bulkIO thread");
 		}
-		advanced_optimizations.sdds_to_bulkio_thread_affinity = getAffinity(m_sddsToBulkIOThread->native_handle());
+		advanced_optimizations.sdds_to_bulkio_thread_affinity = getAffinity(m_sddsToBulkIOThread->native_handle(), _baseLog);
 	} else {
 		advanced_optimizations.sdds_to_bulkio_thread_affinity = request.sdds_to_bulkio_thread_affinity;
 	}
 
 	if (started() && m_socketReaderThread) {
 		if (setAffinity(m_socketReaderThread->native_handle(), request.socket_read_thread_affinity) != 0) {
-			LOG_WARN(SourceSDDS_i, "Failed to set affinity of the socket reader thread");
+			RH_WARN(_baseLog, "Failed to set affinity of the socket reader thread");
 		}
-		advanced_optimizations.socket_read_thread_affinity = getAffinity(m_socketReaderThread->native_handle());
+		advanced_optimizations.socket_read_thread_affinity = getAffinity(m_socketReaderThread->native_handle(), _baseLog);
 	} else {
 		advanced_optimizations.socket_read_thread_affinity = request.socket_read_thread_affinity;
 	}
@@ -235,25 +221,25 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
 	if (not started()) {
 		m_socketReader.setSocketBufferSize(request.udp_socket_buffer_size);
 	} else if (m_socketReader.getSocketBufferSize() != request.udp_socket_buffer_size) {
-		LOG_WARN(SourceSDDS_i, "Cannot set the socket buffer size while the component is running");
+		RH_WARN(_baseLog, "Cannot set the socket buffer size while the component is running");
 	}
 
 	advanced_optimizations.socket_read_thread_priority = request.socket_read_thread_priority;
 
 	if (m_socketReaderThread) {
-		setPolicyAndPriority(m_socketReaderThread->native_handle(), request.socket_read_thread_priority, "socket reader thread");
+		setPolicyAndPriority(m_socketReaderThread->native_handle(), request.socket_read_thread_priority, "socket reader thread", _baseLog);
 	}
 
 	advanced_optimizations.sdds_to_bulkio_thread_priority = request.sdds_to_bulkio_thread_priority;
 
 	if (m_sddsToBulkIOThread) {
-		setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), request.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
+		setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), request.sdds_to_bulkio_thread_priority, "sdds to bulkio thread", _baseLog);
 	}
 
 	if (not started()) {
 		advanced_optimizations.check_for_duplicate_sender = request.check_for_duplicate_sender;
 	} else if (advanced_optimizations.check_for_duplicate_sender != request.check_for_duplicate_sender) {
-		LOG_WARN(SourceSDDS_i, "Cannot change the check for single sender property while running");
+		RH_WARN(_baseLog, "Cannot change the check for single sender property while running");
 	}
 }
 
@@ -264,7 +250,7 @@ void SourceSDDS_i::set_advanced_optimization_struct(struct advanced_optimization
  */
 void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartError) {
 	if (started()) {
-		LOG_WARN(SourceSDDS_i, "Already started, call to start ignored.");
+		RH_WARN(_baseLog, "Already started, call to start ignored.");
 		return;
 	}
 
@@ -272,7 +258,7 @@ void SourceSDDS_i::start() throw (CORBA::SystemException, CF::Resource::StartErr
 	// Setup the socketReader
 	//////////////////////////////////////////
 	if (not m_attach_stream.attached && not attachment_override.enabled) {
-		LOG_INFO(SourceSDDS_i, "Cannot setup the socket reader without either a successful attach or attachment override set. "
+		RH_INFO(_baseLog, "Cannot setup the socket reader without either a successful attach or attachment override set. "
 				"Component will start but will be in a holding pattern until attach override set or attach call made.");
 	} else {
 		_start();
@@ -295,7 +281,7 @@ void SourceSDDS_i::_start() throw (CF::Resource::StartError) {
 		setupSocketReaderOptions();
 	} catch (BadParameterError &e) {
 		errorText << "Failed to setup socket reader options: " << e.what();
-		LOG_ERROR(SourceSDDS_i, errorText.str());
+		RH_ERROR(_baseLog, errorText.str());
 		throw CF::Resource::StartError(CF::CF_EINVAL, errorText.str().c_str());
 	}
 
@@ -306,8 +292,8 @@ void SourceSDDS_i::_start() throw (CF::Resource::StartError) {
 		setAffinity(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_affinity);
 	}
 
-	advanced_optimizations.socket_read_thread_affinity = getAffinity(m_socketReaderThread->native_handle());
-	setPolicyAndPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_priority, "socket reader thread");
+	advanced_optimizations.socket_read_thread_affinity = getAffinity(m_socketReaderThread->native_handle(), _baseLog);
+	setPolicyAndPriority(m_socketReaderThread->native_handle(), advanced_optimizations.socket_read_thread_priority, "socket reader thread", _baseLog);
 
 	//////////////////////////////////////////
 	// Now setup the packet processor
@@ -320,8 +306,8 @@ void SourceSDDS_i::_start() throw (CF::Resource::StartError) {
 		setAffinity(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_affinity);
 	}
 
-	advanced_optimizations.sdds_to_bulkio_thread_affinity = getAffinity(m_sddsToBulkIOThread->native_handle());
-	setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread");
+	advanced_optimizations.sdds_to_bulkio_thread_affinity = getAffinity(m_sddsToBulkIOThread->native_handle(), _baseLog);
+	setPolicyAndPriority(m_sddsToBulkIOThread->native_handle(), advanced_optimizations.sdds_to_bulkio_thread_priority, "sdds to bulkio thread", _baseLog);
 
 }
 
@@ -330,11 +316,11 @@ void SourceSDDS_i::_start() throw (CF::Resource::StartError) {
  * Overridden from the Component API stop but calls the base class stop method as well.
  */
 void SourceSDDS_i::stop () throw (CF::Resource::StopError, CORBA::SystemException) {
-	LOG_DEBUG(SourceSDDS_i, "Stop Called cleaning up");
+	RH_DEBUG(_baseLog, "Stop Called cleaning up");
 	destroyBuffersAndJoinThreads();
-	LOG_DEBUG(SourceSDDS_i, "Calling parent stop method");
+	RH_DEBUG(_baseLog, "Calling parent stop method");
 	SourceSDDS_base::stop();
-	LOG_DEBUG(SourceSDDS_i, "Finished stopping");
+	RH_DEBUG(_baseLog, "Finished stopping");
 }
 
 /**
@@ -366,9 +352,9 @@ void SourceSDDS_i::setupSocketReaderOptions() throw (BadParameterError) {
  *
  */
 char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const char* userid) throw (BULKIO::dataSDDS::AttachError, BULKIO::dataSDDS::StreamInputError) {
-	LOG_INFO(SourceSDDS_i, "Attach called by: " << userid);
+	RH_INFO(_baseLog, "Attach called by: " << userid);
 	if (m_attach_stream.attached) {
-		LOG_ERROR(SourceSDDS_i, "Can only handle a single attach. Detach current stream: " << m_attach_stream.id);
+		RH_ERROR(_baseLog, "Can only handle a single attach. Detach current stream: " << m_attach_stream.id);
 		throw BULKIO::dataSDDS::AttachError("Can only handle a single attach. Detach current stream first");
 	}
 
@@ -383,13 +369,13 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 	}
 
 	if (started() && !attachment_override.enabled) {
-		LOG_INFO(SourceSDDS_i, "Attempting to start SourceSDDS processing with provided attach values.");
+		RH_INFO(_baseLog, "Attempting to start SourceSDDS processing with provided attach values.");
 		try {
 			_start();
 		} catch (CF::Resource::StartError &e) {
 			std::stringstream errorText;
 			errorText << "Failed to start component with provided attach values, attach has failed with the error: " << e.msg;
-			LOG_ERROR(SourceSDDS_i, errorText.str());
+			RH_ERROR(_baseLog, errorText.str());
 			m_attach_stream.attached = false;
 			throw BULKIO::dataSDDS::AttachError(errorText.str().c_str());
 		}
@@ -411,13 +397,13 @@ char* SourceSDDS_i::attach(const BULKIO::SDDSStreamDefinition& stream, const cha
 void SourceSDDS_i::detach(const char* attachId) {
 
 	if (attachId != m_attach_stream.id) {
-		LOG_ERROR(SourceSDDS_i, "ATTACHMENT ID (STREAM ID) NOT FOUND FOR: " << attachId);
+		RH_ERROR(_baseLog, "ATTACHMENT ID (STREAM ID) NOT FOUND FOR: " << attachId);
 		throw BULKIO::dataSDDS::DetachError("Detach called on stream not currently running");
 	}
 
 	bool restart = false;
 	if (started() && !attachment_override.enabled) {
-		LOG_WARN(SourceSDDS_i, "Cannot remove in-use connection via detach when already running, will stop, detach, and restart");
+		RH_WARN(_baseLog, "Cannot remove in-use connection via detach when already running, will stop, detach, and restart");
 		restart = true;
 		stop();
 	}
@@ -451,6 +437,26 @@ void SourceSDDS_i::setupSddsToBulkIOOptions() {
  */
 void SourceSDDS_i::constructor()
 {
+	std::string baseLogName = _baseLog->getName();
+	sdds2bio_log = _baseLog->getChildLogger(baseLogName+"_sdds2bio");
+	socket_log   = _baseLog->getChildLogger(baseLogName+"_socket");
+	RH_DEBUG(_baseLog, " Testing _baseLog with name "<<baseLogName);
+	RH_DEBUG(sdds2bio_log, " Testing sdds2bio_log");
+	RH_DEBUG(socket_log, " Testing socket_log");
+	m_sddsToBulkIO.setLogger(sdds2bio_log);
+	m_socketReader.setLogger(socket_log);
+	setPropertyQueryImpl(advanced_configuration, this, &SourceSDDS_i::get_advanced_configuration_struct);
+	setPropertyQueryImpl(advanced_optimizations, this, &SourceSDDS_i::get_advanced_optimizations_struct);
+	setPropertyQueryImpl(status, this, &SourceSDDS_i::get_status_struct);
+
+	setPropertyConfigureImpl(advanced_configuration, this, &SourceSDDS_i::set_advanced_configuration_struct);
+	setPropertyConfigureImpl(advanced_optimizations, this, &SourceSDDS_i::set_advanced_optimization_struct);
+
+	dataSddsIn->setNewAttachDetachCallback(this);
+	dataSddsIn->setNewSriListener(this, &SourceSDDS_i::newSriListener);
+	dataSddsIn->setSriChangeListener(this, &SourceSDDS_i::newSriListener);
+
+	m_attach_stream.attached = false;
 }
 
 /**
@@ -463,30 +469,30 @@ void SourceSDDS_i::destroyBuffersAndJoinThreads() {
 	// Its possible that the socket readers could be caught waiting on a buffer so call shutdown
 	// then destroy the buffers to break the blocking call. It may return buffers back to the queue so we can call destroy again
 	// at the end.  It shouldn't hurt...right?
-	LOG_DEBUG(SourceSDDS_i, "Shutting down the socket reader thread");
+	RH_DEBUG(_baseLog, "Shutting down the socket reader thread");
 	m_socketReader.shutDown();
-	LOG_DEBUG(SourceSDDS_i, "Shutting down the sdds to bulkio thread");
+	RH_DEBUG(_baseLog, "Shutting down the sdds to bulkio thread");
 	m_sddsToBulkIO.shutDown();
 
-	LOG_DEBUG(SourceSDDS_i, "Destroying the existing packet buffers");
+	RH_DEBUG(_baseLog, "Destroying the existing packet buffers");
 	m_pktbuffer.shutDown();
 
 	// Delete the socket reader and sddsToBulkIO thread if it already exists
 	if (m_socketReaderThread) {
-		LOG_DEBUG(SourceSDDS_i, "Joining the socket reader thread");
+		RH_DEBUG(_baseLog, "Joining the socket reader thread");
 		m_socketReaderThread->join();
 		delete m_socketReaderThread;
 		m_socketReaderThread = NULL;
 	}
 
 	if (m_sddsToBulkIOThread) {
-		LOG_DEBUG(SourceSDDS_i, "Joining the sdds to bulkio thread");
+		RH_DEBUG(_baseLog, "Joining the sdds to bulkio thread");
 		m_sddsToBulkIOThread->join();
 		delete m_sddsToBulkIOThread;
 		m_sddsToBulkIOThread = NULL;
 	}
 
-	LOG_DEBUG(SourceSDDS_i, "Everything should be shutdown and joined");
+	RH_DEBUG(_baseLog, "Everything should be shutdown and joined");
 }
 
 /**
@@ -498,7 +504,7 @@ void SourceSDDS_i::destroyBuffersAndJoinThreads() {
  */
 int SourceSDDS_i::serviceFunction()
 {
-    LOG_DEBUG(SourceSDDS_i, "Component has no service function, returning FINISHED");
+    RH_DEBUG(_baseLog, "Component has no service function, returning FINISHED");
     return FINISH;
 }
 

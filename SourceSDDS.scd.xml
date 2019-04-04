@@ -36,15 +36,20 @@ with this program.  If not, see http://www.gnu.org/licenses/.
     <supportsinterface repid="IDL:CF/LogConfiguration:1.0" supportsname="LogConfiguration"/>
     <ports>
       <provides repid="IDL:BULKIO/dataSDDS:1.0" providesname="dataSddsIn">
+        <description>The SDDS Input Port. This port provides an attach() and pushSRI() call to provide the network information to the component about where to find the SDDS network data stream. This port only passes metadata not the data stream itself. </description>
         <porttype type="data"/>
       </provides>
       <uses repid="IDL:BULKIO/dataOctet:1.0" usesname="dataOctetOut">
+        <description>BULKIO output for 8 bit fixed point data. </description>
         <porttype type="data"/>
       </uses>
       <uses repid="IDL:BULKIO/dataShort:1.0" usesname="dataShortOut">
+        <description>BULKIO output for 16 bit fixed point data. </description>
         <porttype type="data"/>
       </uses>
-      <uses repid="IDL:BULKIO/dataFloat:1.0" usesname="dataFloatOut"/>
+      <uses repid="IDL:BULKIO/dataFloat:1.0" usesname="dataFloatOut">
+        <description>BULKIO output for 32 bit floating point data. </description>
+      </uses>
     </ports>
   </componentfeatures>
   <interfaces>

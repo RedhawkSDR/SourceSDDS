@@ -1,10 +1,10 @@
-43a55e1e0a5945b88230e55f051e2af3  main.cpp
+a5f00a00099f48bcd89772e5b6219462  main.cpp
 17a0178e2803c111b6c52428f3ea096e  SourceSDDS_base.h
 8bfcd22353c3a57fee561ad86ee2a56b  reconf
-92f149fe939593228f00c4872d094289  configure.ac
-e0eff76c70b7eb0426233c243ec8f328  Makefile.am
-297a491dfed990b77e43ac2d6f836013  struct_props.h
+6ea5605659d2b989e1c727c035dc5d8a  configure.ac
+edf4b34499d2ba73018c00e4c7483952  Makefile.am
+16a133fc82ff3456549eaa40b8bb714e  struct_props.h
 780030ed0329789998a4a3e4e151fdbc  SourceSDDS.h
 239478e762c41bc33014e5abef99597b  SourceSDDS.cpp
 2b2faa5cfc83438427491f4be5d6ee59  build.sh
-8db58c9753279c3225453fcfd09f5a14  SourceSDDS_base.cpp
+63909c4435b3dc0c6e6618c8f96c338f  SourceSDDS_base.cpp

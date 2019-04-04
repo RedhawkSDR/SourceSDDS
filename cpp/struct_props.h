@@ -42,11 +42,15 @@ struct advanced_optimizations_struct {
         socket_read_thread_priority = -1;
         sdds_to_bulkio_thread_priority = -1;
         check_for_duplicate_sender = false;
-    };
+    }
 
     static std::string getId() {
         return std::string("advanced_optimizations");
-    };
+    }
+
+    static const char* getFormat() {
+        return "IIHHssiib";
+    }
 
     CORBA::ULong buffer_size;
     CORBA::ULong udp_socket_buffer_size;
@@ -142,6 +146,17 @@ inline bool operator!= (const advanced_optimizations_struct& s1, const advanced_
     return !(s1==s2);
 }
 
+namespace enums {
+    // Enumerated values for attachment_override
+    namespace attachment_override {
+        // Enumerated values for attachment_override:endianness
+        namespace endianness {
+            static const std::string Little_Endian = "1234";
+            static const std::string Big_Endian = "4321";
+        }
+    }
+}
+
 struct attachment_override_struct {
     attachment_override_struct ()
     {
@@ -150,11 +165,15 @@ struct attachment_override_struct {
         vlan = 0;
         port = 29495;
         endianness = "4321";
-    };
+    }
 
     static std::string getId() {
         return std::string("attachment_override");
-    };
+    }
+
+    static const char* getFormat() {
+        return "bsHHs";
+    }
 
     bool enabled;
     std::string ip_address;
@@ -223,11 +242,15 @@ struct advanced_configuration_struct {
     {
         push_on_ttv = false;
         wait_on_ttv = false;
-    };
+    }
 
     static std::string getId() {
         return std::string("advanced_configuration");
-    };
+    }
+
+    static const char* getFormat() {
+        return "bb";
+    }
 
     bool push_on_ttv;
     bool wait_on_ttv;
@@ -267,6 +290,17 @@ inline bool operator!= (const advanced_configuration_struct& s1, const advanced_
     return !(s1==s2);
 }
 
+namespace enums {
+    // Enumerated values for status
+    namespace status {
+        // Enumerated values for status::input_endianness
+        namespace input_endianness {
+            static const std::string Little_Endian = "1234";
+            static const std::string Big_Endian = "4321";
+        }
+    }
+}
+
 struct status_struct {
     status_struct ()
     {
@@ -286,11 +320,15 @@ struct status_struct {
         time_slips = 0LL;
         num_packets_dropped_by_nic = 0;
         interface = "";
-    };
+    }
 
     static std::string getId() {
         return std::string("status");
-    };
+    }
+
+    static const char* getFormat() {
+        return "HIHsssisiisdslis";
+    }
 
     unsigned short expected_sequence_number;
     CORBA::ULong dropped_packets;

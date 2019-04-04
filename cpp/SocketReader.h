@@ -42,7 +42,6 @@
 typedef boost::shared_ptr<SDDSpacket> SddsPacketPtr;
 
 class SocketReader {
-	ENABLE_LOGGING
 public:
 	SocketReader();
 	virtual ~SocketReader();
@@ -56,7 +55,9 @@ public:
     size_t getSocketBufferSize();
     std::string getInterface();
     bool setSocketBlockingEnabled(int fd, bool blocking);
+	void setLogger(LOGGER log);
 private:
+    LOGGER _log;
     bool m_shuttingDown;
     bool m_running;
     int m_timeout;

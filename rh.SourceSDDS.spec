@@ -30,8 +30,8 @@ Prefix:         %{_prefix}
 %define _infodir       %{_prefix}/info
 
 Name:           rh.SourceSDDS
-Version:        1.1.1
-Release:        4%{?dist}
+Version:        2.0.0
+Release:        1%{?dist}
 Summary:        Component %{name}
 
 Group:          REDHAWK/Components
@@ -39,13 +39,13 @@ License:        None
 Source0:        %{name}-%{version}.tar.gz
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-BuildRequires:  redhawk-devel >= 2.0
-Requires:       redhawk >= 2.0
+BuildRequires:  redhawk-devel >= 2.1
+Requires:       redhawk >= 2.1
 
 
 # Interface requirements
-BuildRequires:  bulkioInterfaces >= 2.0
-Requires:       bulkioInterfaces >= 2.0
+BuildRequires:  bulkioInterfaces >= 2.1
+Requires:       bulkioInterfaces >= 2.1
 
 
 %description

@@ -55,7 +55,13 @@ time_t getStartOfYear() {
  * startOfYear is the value calculated from the getStartOfYear function and is updated if the year has rolled over.
  * lastWSec is the last whole number of seconds from the SDDS Packet and is updated each time. It is used to determine if the year has rolled over.
  */
-BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime &last_sdds_time, time_t &startOfYear) {
+BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime &last_sdds_time, time_t &startOfYear, LOGGER _log) {
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "getBulkIOTimeStamp method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "getBulkIOTimeStamp method passed valid logger "<<_log->getName());
+    }
 	BULKIO::PrecisionUTCTime T;
 
 	// TODO: Originally the SourceNIC component always set this to TCS_VALID, why? Which is correct?
@@ -83,7 +89,7 @@ BULKIO::PrecisionUTCTime getBulkIOTimeStamp(SDDSpacket* sdds_pkt, const SDDSTime
 
 	/* this means the current year changed */
 	if (t < last_sdds_time) {
-		RH_NL_INFO("SddsToBulkIOUtils", "Looks as though the year rolled over while processing SDDS time stamps. Happy New Year!");
+		RH_INFO(_log, "SddsToBulkIOUtils: Looks as though the year rolled over while processing SDDS time stamps. Happy New Year!");
 		startOfYear = getStartOfYear();
 	}
 
@@ -177,9 +183,18 @@ bool compareSRI(BULKIO::StreamSRI A, BULKIO::StreamSRI B) {
 	return same;
 }
 
-void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, std::string &endianness_comp) {
+void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI, bool &useUpstream, bool &changed, bool &streamIDChanged,std::string &endianness_comp, LOGGER _log) {
+    if (!_log) {
+        _log = rh_logger::Logger::getLogger("SourceSDDS_utils");
+        RH_DEBUG(_log, "mergeUpstreamSRI method passed null logger; creating logger "<<_log->getName());
+    } else {
+        RH_DEBUG(_log, "mergeUpstreamSRI method passed valid logger "<<_log->getName());
+    }
 	if (!compareSRI(currSRI, upstreamSRI)) {
 		changed = true;
+	    if (currSRI.streamID != upstreamSRI.streamID)
+	    	streamIDChanged = true;
+
 		currSRI.streamID = upstreamSRI.streamID;
 
 		currSRI.hversion = upstreamSRI.hversion;
@@ -210,9 +225,9 @@ void mergeUpstreamSRI(BULKIO::StreamSRI &currSRI, BULKIO::StreamSRI &upstreamSRI
 				} else if (endianness_sri == "52651" || endianness_sri == ENDIANNESS::BIG_ENDIAN_STR) {
 					endianness_comp = ENDIANNESS::BIG_ENDIAN_STR;
 				} else {
-					RH_NL_ERROR("SddsToBulkIOUtils",  "SRI contained unknown endianness value: " << endianness_sri <<
+					RH_ERROR(_log, "SddsToBulkIOUtils: SRI contained unknown endianness value: " << endianness_sri <<
 							" Value must be either: 43981 or 1234 for Little Endian and  52651 or 4321 for Big Endian");
-					RH_NL_WARN("SddsToBulkIOUtils", "Endianness being reset to default");
+					RH_WARN(_log, "SddsToBulkIOUtils: Endianness being reset to default");
 					endianness_comp = ENDIANNESS::ENDIAN_DEFAULT;
 				}
 

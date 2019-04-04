@@ -44,7 +44,6 @@
 typedef boost::shared_ptr<SDDSpacket> SddsPacketPtr;
 
 class SddsToBulkIOProcessor {
-	ENABLE_LOGGING
 public:
 	SddsToBulkIOProcessor(bulkio::OutOctetPort *octet_out, bulkio::OutShortPort *short_out, bulkio::OutFloatPort *float_out);
 	virtual ~SddsToBulkIOProcessor();
@@ -66,7 +65,9 @@ public:
 	std::string getEndianness();
 	void setEndianness(std::string endianness);
 	long getTimeSlips();
+	void setLogger(LOGGER log);
 private:
+	LOGGER _log;
 	size_t m_pkts_per_read;
 	bool m_running;
 	bool m_shuttingDown;
@@ -95,13 +96,16 @@ private:
 	double m_max_time_step, m_min_time_step, m_ideal_time_step, m_time_error_accum, m_accum_error_tolerance;
 	bool m_non_conforming_device;
 	boost::mutex m_upstream_sri_lock;
+    bulkio::OutFloatStream floatStream;
+    bulkio::OutShortStream shortStream;
+    bulkio::OutOctetStream octetStream;
 
 	void processPackets(std::deque<SddsPacketPtr> &pktsToWork, std::deque<SddsPacketPtr> &pktsToRecycle);
 	bool orderIsValid(SddsPacketPtr &pkt);
-	void pushPacket(bool eos);
 	void pushSri();
 	void checkForTimeSlip(SddsPacketPtr &pkt);
 	void updateExpectedXdelta(double rate, bool complex);
+	void createOutputStreams();
 };
 
 #endif /* SDDSTOBULKIOPROCESSOR_H_ */

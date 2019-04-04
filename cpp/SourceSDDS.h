@@ -30,7 +30,6 @@
 
 class SourceSDDS_i : public SourceSDDS_base, public bulkio::InSDDSPort::Callback
 {
-    ENABLE_LOGGING
     public:
         SourceSDDS_i(const char *uuid, const char *label);
         ~SourceSDDS_i();
@@ -43,6 +42,8 @@ class SourceSDDS_i : public SourceSDDS_base, public bulkio::InSDDSPort::Callback
 		void detach(const char* attachId);
 		void newSriListener(const BULKIO::StreamSRI & newSri);
     private:
+		LOGGER sdds2bio_log;
+		LOGGER socket_log;
         SmartPacketBuffer<SDDSpacket> m_pktbuffer;
 
         boost::thread *m_socketReaderThread;

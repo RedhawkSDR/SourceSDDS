@@ -1,7 +1,6 @@
 variables:
-  rh_20_release: '2-0-8'
   rh_22_release: '2-2-2'
-  rh_23_release: '2-3-0'
+  rh_23_release: 'develop'
   namespace: rh.
   test_suite: test_$CI_PROJECT_NAME.py
 
@@ -91,33 +90,6 @@ before_script:
     - /^.*-external$/
     - /^(\d+\.)?(\d+)?(\.\d+)$/
 
-package:el6:rh2.0:
-  variables:
-    latest_version: develop-2-0
-    release_version: $rh_20_release
-    short_version: '2.0'
-    dist: el6
-    arch: x86_64
-  <<: *package
-
-package:el6-i386:rh2.0:
-  variables:
-    latest_version: develop-2-0
-    release_version: $rh_20_release
-    short_version: '2.0'
-    dist: el6
-    arch: i686
-  <<: *package
-
-package:el7:rh2.0:
-  variables:
-    latest_version: develop-2-0
-    release_version: $rh_20_release
-    short_version: '2.0'
-    dist: el7
-    arch: x86_64
-  <<: *package
-
 package:el6:rh2.2:
   variables:
     latest_version: develop-2-2
@@ -153,35 +125,6 @@ package:el7:rh2.3:
     dist: el7
     arch: x86_64
   <<: *package
-
-test:el6:rh2.0:
-  variables:
-    latest_version: develop-2-0
-    release_version: $rh_20_release
-    short_version: '2.0'
-    dist: el6
-    arch: x86_64
-  <<: *test
-  only:
-    - branches
-
-test:el6-i386:rh2.0:
-  variables:
-    latest_version: develop-2-0
-    release_version: $rh_20_release
-    short_version: '2.0'
-    dist: el6
-    arch: i686
-  <<: *test
-
-test:el7:rh2.0:
-  variables:
-    latest_version: develop-2-0
-    release_version: $rh_20_release
-    short_version: '2.0'
-    dist: el7
-    arch: x86_64
-  <<: *test
 
 test:el6:rh2.2:
   variables:
@@ -270,15 +213,6 @@ deploy-el7-2.2:
     - package:el7:rh2.2
   <<: *s3
 
-deploy-el7-2.0:
-  variables:
-    dist: el7
-    arch: x86_64
-    short_version: '2.0'
-  dependencies:
-    - package:el7:rh2.0
-  <<: *s3
-
 deploy-el6-2.3:
   variables:
     dist: el6
@@ -295,13 +229,4 @@ deploy-el6-2.2:
     short_version: '2.2'
   dependencies:
     - package:el6:rh2.2
-  <<: *s3
-
-deploy-el6-2.0:
-  variables:
-    dist: el6
-    arch: x86_64
-    short_version: '2.0'
-  dependencies:
-    - package:el6:rh2.0
   <<: *s3

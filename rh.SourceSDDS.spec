@@ -47,6 +47,10 @@ Requires:       redhawk >= 2.1
 BuildRequires:  bulkioInterfaces >= 2.1
 Requires:       bulkioInterfaces >= 2.1
 
+# Allow upgrades from previous package name
+Obsoletes:      rh.SourceSDDS < 1.1.1
+
+
 
 %description
 Component %{name}
